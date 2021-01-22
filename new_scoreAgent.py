@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from model import cornerModel, region_model
 from drn import drn_c_26
 from new_utils import *
@@ -7,6 +8,7 @@ import skimage
 import matplotlib.pyplot as plt
 import threading
 import time
+from new_config import *
 
 
 class gpu_thread(threading.Thread):
@@ -28,6 +30,383 @@ class gpu_thread(threading.Thread):
             edge_ele.store_score(score)
 
         print('[Thread {}] End, in {}s'.format(self.threadId, time.time()-start_time))
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels, mid_channels=None):
+        super(DoubleConv, self).__init__()
+        if not mid_channels:
+            mid_channels = out_channels
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(mid_channels),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
+class Down(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Down, self).__init__()
+        self.down_conv = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, stride=2),
+            nn.BatchNorm2d(in_channels),
+            nn.LeakyReLU(inplace=True),
+            DoubleConv(in_channels, out_channels)
+        )
+
+    def forward(self, x):
+        return self.down_conv(x)
+
+class Up(nn.Module):
+    def __init__(self, in_channels, out_channels, bilinear=False):
+        super(Up, self).__init__()
+
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=4, stride=2, padding=1)
+            self.conv = DoubleConv(in_channels, out_channels)
+
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
+
+class UNet_big(nn.Module):
+    def __init__(self, n_channels, n_classes, bilinear=False):
+        super(UNet_big, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.bilinear = bilinear
+
+        self.inc = DoubleConv(n_channels, 32)
+        self.down1 = Down(32, 64)
+        self.down2 = Down(64, 128)
+        self.down3 = Down(128, 256)
+        self.down4 = Down(256, 512)
+        self.down5 = Down(512, 1024)
+        factor = 2 if bilinear else 1
+        self.down6 = Down(1024,  2048// factor)
+        self.up1 = Up(2048, 1024 // factor, bilinear)
+        self.up2 = Up(1024, 512 // factor, bilinear)
+        self.up3 = Up(512, 256 // factor, bilinear)
+        self.up4 = Up(256, 128 // factor, bilinear)
+        self.up5 = Up(128, 64 // factor, bilinear)
+        self.up6 = Up(64, 32, bilinear)
+        self.out = nn.Sequential(
+            nn.Conv2d(32, n_classes, kernel_size=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x6 = self.down5(x5)
+        x7 = self.down6(x6)
+        x = self.up1(x7, x6)
+        x = self.up2(x, x5)
+        x = self.up3(x, x4)
+        x = self.up4(x, x3)
+        x = self.up5(x, x2)
+        x = self.up6(x, x1)
+        return self.out(x)
+
+class edge_net(nn.Module):
+    def __init__(self, backbone_channel=64, edge_bin_size=36):
+        super(edge_net, self).__init__()
+        self.backbone_channel = backbone_channel
+        self.edge_bin_size = edge_bin_size
+        self.decoder1 = nn.Sequential(
+            DoubleConv(6+backbone_channel, 64), # coord_conv (2), mask (2), edge (1), corner_map(1)
+            DoubleConv(64, 128),
+            Down(128,128),
+            Down(128,128),
+            Down(128,256)
+        )
+        self.decoder2 = nn.Sequential(
+            nn.Linear(256+self.edge_bin_size, 256),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(256, 256),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(256, 256),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(256, 2)
+        )
+        self.maxpool = nn.AdaptiveMaxPool2d((1,1))
+
+    def forward(self, edge_mask, mask, image_volume, corner_map, edge_bin):
+        '''
+        :param edge_mask: Nx1xWxH
+        :param mask: Nx2xWxH
+        :param image_volume: Nxbackbone_channelxWxH
+        :param edge_bin: Nxedge_bin_size
+        :return:
+        '''
+
+        x_channel = torch.arange(edge_mask.shape[2], device=edge_mask.device).repeat(1, edge_mask.shape[3], 1)
+        y_channel = torch.arange(edge_mask.shape[3],
+                                 device=edge_mask.device).repeat(1, edge_mask.shape[2], 1).transpose(1,2)
+        x_channel = x_channel.float() / (edge_mask.shape[2]-1)
+        y_channel = y_channel.float() / (edge_mask.shape[3]-1)
+
+        x_channel = x_channel*2-1
+        y_channel = y_channel*2-1
+
+        x_channel = x_channel.repeat(edge_mask.shape[0], 1, 1, 1)
+        y_channel = y_channel.repeat(edge_mask.shape[0], 1, 1, 1)
+
+        input_ = torch.cat((x_channel, y_channel, edge_mask, mask, image_volume, corner_map), 1)
+
+        out = self.decoder1(input_)
+        out = self.maxpool(out)
+        out = torch.flatten(out, 1)
+
+        input_ = torch.cat((out, edge_bin), 1)
+        out = self.decoder2(input_)
+
+        return out
+
+class corner_unet(nn.Module):
+    def __init__(self, bilinear=False, backbone_channel=64):
+        super(corner_unet, self).__init__()
+        self.bilinear = bilinear
+        self.backbone_channel = backbone_channel
+        self.inc = DoubleConv(2, 16)
+        self.down1 = Down(16+self.backbone_channel, 64)
+        self.down2 = Down(64, 128)
+        self.down3 = Down(128, 256)
+        self.down4 = Down(256, 512)
+        factor = 2 if bilinear else 1
+        self.down5 = Down(512, 1024 // factor)
+        self.up1 = Up(1024, 512 // factor, bilinear)
+        self.up2 = Up(512, 256 // factor, bilinear)
+        self.up3 = Up(256, 128 // factor, bilinear)
+        self.up4 = Up(128, 64 // factor, bilinear)
+        self.up51 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
+        self.up52 = DoubleConv(32+16, 32)
+        self.out = nn.Sequential(
+            nn.Conv2d(32, 1, kernel_size=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, mask, image_volume):
+        x1 = self.inc(mask)
+        x2 = self.down1(torch.cat((x1, image_volume),1))
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x6 = self.down5(x5)
+        x = self.up1(x6, x5)
+        x = self.up2(x, x4)
+        x = self.up3(x, x3)
+        x = self.up4(x, x2)
+        x = self.up51(x)
+        x = self.up52(torch.cat((x1,x),1))
+        return self.out(x)
+
+
+class scoreEvaluator_with_train(nn.Module):
+
+    def to(self, *args, **kwargs):
+        super(scoreEvaluator_with_train, self).to(*args, **kwargs)
+        self.device = args[0]
+
+    def __init__(self, datapath, backbone_channel=64, edge_bin_size=36, data_scale=1, corner_bin=False):
+        super(scoreEvaluator_with_train, self).__init__()
+        self.backbone_channel = backbone_channel
+        self.edge_bin_size = edge_bin_size
+        self.data_scale = data_scale
+        self.backbone = UNet_big(3, backbone_channel) # for image
+        channel_size = backbone_channel + bin_size if corner_bin else backbone_channel
+        self.cornerNet = corner_unet(backbone_channel=channel_size)
+        self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
+        self.img_cache = imgCache(datapath)
+        self.corner_bin = corner_bin
+        self.region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
+        self.device = 'cpu'
+        if self.corner_bin:
+            self.corner_bin_Net = UNet_big(3, bin_size)
+
+    def getbinmap(self, img):
+        return self.corner_bin_Net(img)
+
+    def imgvolume(self, img):
+        return self.backbone(img)
+
+    def cornerEvaluator(self, mask, img_volume, binmap=None):
+        '''
+        :param mask: graph mask Nx2xhxw
+        :return: Nx1xhxw
+        '''
+        if self.corner_bin:
+            out = self.cornerNet(mask, torch.cat((img_volume, binmap), 1))
+        else:
+            out = self.cornerNet(mask, img_volume)
+        return out
+
+    def edgeEvaluator(self, edge_mask, mask, img_volume, corner_map, edge_bin, binmap=None):
+        if self.corner_bin:
+            out = self.edgeNet(edge_mask, mask, torch.cat((img_volume, binmap),1), corner_map, edge_bin)
+        else:
+            out = self.edgeNet(edge_mask, mask, img_volume, corner_map, edge_bin)
+        return out
+
+    def regionEvaluator(self):
+        pass
+
+    def corner_map2score(self, corners, corner_map):
+        corner_state = np.ones(corners.shape[0])
+        scale_corners = corners*self.data_scale
+        for corner_i in range(scale_corners.shape[0]):
+            loc = np.round(scale_corners[corner_i]).astype(np.int)
+            if loc[0] <= 1:
+                x0 = 0
+            else:
+                x0 = loc[0] - 1
+            if loc[0] >= 254:
+                x1 = 256
+            else:
+                x1 = loc[0] + 2
+
+            if loc[1] <= 1:
+                y0 = 0
+            else:
+                y0 = loc[1] - 1
+            if loc[1] >= 254:
+                y1 = 256
+            else:
+                y1 = loc[1] + 2
+            heat = corner_map[x0:x1, y0:y1]
+            corner_state[corner_i] = 1-2*heat.sum()/(heat.shape[0]*heat.shape[1])
+        return corner_state
+
+    def get_score(self, candidate, all_edge=False):
+        graph = candidate.graph
+        corners = graph.getCornersArray()
+        edges = graph.getEdgesArray()
+
+        img = self.img_cache.get_image(candidate.name)
+        img = img.transpose((2,0,1))
+        img = (img - np.array(mean)[:, np.newaxis, np.newaxis]) / np.array(std)[:, np.newaxis, np.newaxis]
+
+        mask = render(corners, edges, render_pad=-1, scale=self.data_scale)
+
+        img = torch.cuda.FloatTensor(img, device=self.device).unsqueeze(0)
+        mask = torch.cuda.FloatTensor(mask, device=self.device).unsqueeze(0)
+
+        # corner and image volume
+        with torch.no_grad():
+            img_volume = self.imgvolume(img)
+            if self.corner_bin:
+                bin_map = self.getbinmap(img)
+            else:
+                bin_map = None
+            corner_pred = self.cornerEvaluator(mask, img_volume, bin_map)
+        corner_map = corner_pred.cpu().detach().numpy()[0][0]
+        corner_state = self.corner_map2score(corners, corner_map)
+        graph.store_score(corner_score=corner_state)
+
+        # edges that need to be predicted
+        edge_update_list = []
+        for edge_ele in graph.getEdges():
+            if edge_ele.get_score() is None or all_edge:
+                edge_update_list.append(edge_ele)
+
+        batchs = patch_samples(len(edge_update_list), 16)
+        for idx, batch in enumerate(batchs):
+            inputs = []
+            for update_i in batch:
+                edge_ele = edge_update_list[update_i]
+                loc1 = edge_ele.x[0].x
+                loc2 = edge_ele.x[1].x
+                loc1 = (round(loc1[0]*self.data_scale), round(loc1[1]*self.data_scale))
+                loc2 = (round(loc2[0]*self.data_scale), round(loc2[1]*self.data_scale))
+                temp_mask = cv2.line(
+                    np.ones((int(256*self.data_scale),int(256*self.data_scale)))*-1,
+                    loc1[::-1], loc2[::-1], 1.0,
+                    thickness=2)[np.newaxis, np.newaxis, ...]
+                inputs.append(temp_mask)
+            edge_input_mask = np.concatenate(inputs, 0)
+            edge_input_mask = torch.cuda.FloatTensor(edge_input_mask, device=self.device)
+            with torch.no_grad():
+                if self.corner_bin:
+                    edge_batch_pred = self.edgeEvaluator(
+                        edge_input_mask,
+                        mask.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        img_volume.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        corner_pred.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        torch.zeros(edge_input_mask.shape[0],self.edge_bin_size, device=self.device),
+                        bin_map.expand(edge_input_mask.shape[0],-1,-1,-1)
+                    )
+                else:
+                    edge_batch_pred = self.edgeEvaluator(
+                        edge_input_mask,
+                        mask.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        img_volume.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        corner_pred.expand(edge_input_mask.shape[0],-1,-1,-1),
+                        torch.zeros(edge_input_mask.shape[0],self.edge_bin_size, device=self.device)
+                    )
+            edge_batch_pred = edge_batch_pred.cpu().detach()
+            edge_batch_score = edge_batch_pred.exp()[:,1]/edge_batch_pred.exp().sum(1)
+            edge_batch_score = edge_batch_score.numpy()
+            for edge_i, update_i in enumerate(batch):
+                edge_ele = edge_update_list[update_i]
+                edge_ele.store_score(1-2*edge_batch_score[edge_i]*edge_batch_score[edge_i])
+
+        # region
+        gt_mask = self.region_cache.get_region(candidate.name)
+        gt_mask = gt_mask > 0.4
+        conv_mask = render(corners=corners, edges=edges, render_pad=0, edge_linewidth=1)[0]
+        conv_mask = 1 - conv_mask
+        conv_mask = conv_mask.astype(np.uint8)
+        labels, region_mask = cv2.connectedComponents(conv_mask, connectivity=4)
+
+        background_label = region_mask[0,0]
+        all_masks = []
+        for region_i in range(1, labels):
+            if region_i == background_label:
+                continue
+            the_region = region_mask == region_i
+            if the_region.sum() < 20:
+                continue
+            all_masks.append(the_region)
+
+        pred_mask = (np.sum(all_masks, 0) + (1 - conv_mask))>0
+
+        iou = IOU(pred_mask, gt_mask)
+        region_score = np.array([iou])
+        graph.store_score(region_score=region_score)
+
+    def store_weight(self, path, prefix):
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'backbone')), 'wb') as f:
+            torch.save(self.backbone.state_dict(), f)
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'corner')), 'wb') as f:
+            torch.save(self.cornerNet.state_dict(), f)
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'edge')), 'wb') as f:
+            torch.save(self.edgeNet.state_dict(), f)
+        if self.corner_bin:
+            with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'binnet')), 'wb') as f:
+                torch.save(self.corner_bin_Net.state_dict(), f)
+
+    def load_weight(self, path, prefix):
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'backbone')), 'rb') as f:
+            self.backbone.load_state_dict(torch.load(f))
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'corner')), 'rb') as f:
+            self.cornerNet.load_state_dict(torch.load(f))
+        with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'edge')), 'rb') as f:
+            self.edgeNet.load_state_dict(torch.load(f))
+        if self.corner_bin:
+            with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'binnet')), 'rb') as f:
+                self.corner_bin_Net.load_state_dict(torch.load(f))
 
 
 class scoreEvaluator():
@@ -148,7 +527,7 @@ class scoreEvaluator():
 
         ########################### corner ################################
         corner_time = time.time()
-        batchs = patch_samples(len(candidate_list), 128)
+        batchs = patch_samples(len(candidate_list), 16)
         for batch in batchs:
             inputs = []
             for candidate_i in batch:
@@ -183,8 +562,7 @@ class scoreEvaluator():
                     update_list.append((graph, edge_ele))
 
         # split into batches
-        batchs = patch_samples(len(update_list), 128)
-        gpu2cpu_thread_list = []
+        batchs = patch_samples(len(update_list), 16)
         for bi, batch in enumerate(batchs):
             inputs = []
             for update_i in batch:
@@ -205,7 +583,7 @@ class scoreEvaluator():
                 out = self.edgeEvaluator(torch.cat(inputs, 0))
             out = out.detach()
 
-            out = out.cpu() # time consuming!!!
+            out = out.cpu()
             edge_batch_score = out.exp()[:,0] / out.exp().sum(1)
             edge_batch_score = edge_batch_score.numpy()
             for edge_i in range(edge_batch_score.shape[0]):
@@ -345,7 +723,7 @@ class scoreEvaluator():
                 edge_index.append(edge_i)
 
         if self.edgeEvaluator is not None:
-            batchs = patch_samples(len(edge_index), 8)
+            batchs = patch_samples(len(edge_index), 16)
 
             edge_score = np.array([])
             for batch in batchs:
@@ -616,32 +994,3 @@ class scoreEvaluator():
         graph.store_score(corner_score=corners_score, edge_score=edges_score,
                           region_score=regions_score)
 
-
-if __name__ == '__main__':
-    from dataset import myDataset
-    data_folder = '/local-scratch/fuyang/cities_dataset'
-
-    test_dataset = myDataset(data_folder, phase='valid', edge_linewidth=2, render_pad=-1)
-
-    test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=1,
-                                              shuffle=True,
-                                              num_workers=1,
-                                              drop_last=True)
-
-    evaluator = scoreEvaluator({'cornerModelPath':'/local-scratch/fuyang/result/corner_v2/gt_mask_with_gt/models/440.pt',
-                                'edgeModelPath':'/local-scratch/fuyang/result/corner_edge_region/edge_graph_drn26_with_search_v2/models/best.pt',
-                                'edgeHeatmapPath': '/local-scratch/fuyang/result/corner_edge_region/edge_heatmap_unet/all_edge_masks',
-                                'regionHeatmapPath': '/local-scratch/fuyang/result/corner_edge_region/all_region_masks'
-                                }, useHeatmap=True)
-
-    for idx, data in enumerate(test_loader):
-        name = data['name'][0]
-        if name != '1548207062.26':
-            continue
-        img = data['img'][0]
-        graph_data = test_dataset.getDataByName(name)
-        conv_data = graph_data['conv_data']
-        corners = conv_data['corners']
-        edges = conv_data['edges']
-        original_score, original_false = evaluator.get_score(img=img, corners=corners, edges=edges, name=name)

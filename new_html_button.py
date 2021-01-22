@@ -1,9 +1,7 @@
 import os
 import numpy as np
 
-base_path = '/local-scratch/fuyang/result/beam_search_v2/corner_edge_region_test'
-img_path = '/local-scratch/fuyang/cities_dataset'
-entire_mask_path = '/local-scratch/fuyang/result/corner_edge_region/entire_region_mask'
+base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch/valid_prefix_1_result'
 f = open(os.path.join(base_path, 'demo.html'), 'w')
 
 size = 256
@@ -21,18 +19,18 @@ for idx, name in enumerate(os.listdir(base_path)):
             + name + '&nbsp;'*50 + 'gt: ' + str(gt_overall_score) +
             '&nbsp;'*50 + str(gt_false_corner_num) + '&nbsp;'*50 + str(gt_false_edge_num) +
             '&nbsp;'*50 + str(gt_region_score) + '&nbsp;'*50 +
-            'score = corner_score + 2edge_score + 60region_score' + '</big></b></p>')
+            'score = corner_score + 2edge_score + 100region_score' + '</big></b></p>') #TODO remove the hard code
     f.write('<p>')
     if os.path.exists(os.path.join(base_path,name,'edge_heatmap.png')):
         f.write('<img src="' + os.path.join(name, 'edge_heatmap.png') + '" width="'+str(size)+'">')
         f.write('<img src="' + os.path.join(name, 'maskrcnn.png') + '" width="'+str(size)+'">')
-    f.write('&nbsp;<img src="' + os.path.join(img_path, 'rgb', name+'.jpg') + '" width="'+str(size)+'">')
+    f.write('&nbsp;<img src="' + os.path.join(name, 'image.jpg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'iter_0_num_0.svg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred.svg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_corner.png') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_edge.png') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_region.png') + '" width="'+str(size)+'">')
-    f.write('&nbsp;<img src="' + os.path.join(entire_mask_path, name+'.png') + '" width="'+str(size)+'">')
+    f.write('&nbsp;<img src="' + os.path.join(name, 'maskrcnn.png') + '" width="'+str(size)+'">')
 
     f.write('</p>\n')
 
@@ -80,13 +78,15 @@ for idx, name in enumerate(os.listdir(base_path)):
     f.write('</script>\n')
 
 
-    for _iter in range(6):
+    for _iter in range(15):
+        if 'iter_{}_num_0'.format(_iter) not in info_.keys():
+            break
         f.write('&nbsp;'*5)
         f.write('<a href="javascript:;" id="example_'+ str(idx) + '_iter_' + str(_iter) +'">iter '+str(_iter)+' </a>\n')
         f.write('<span id="example_content_'+ str(idx) +'_iter_' + str(_iter) +'">  </span>\n')
         f.write('<script type="application/javascript">')
         img_html_text = ''
-        for _id in range(3):
+        for _id in range(10):
             namePath = os.path.join(name, 'iter_' + str(_iter) + '_num_'+str(_id))
             info_name = 'iter_'+str(_iter)+'_num_'+str(_id)
             if info_name not in info_.keys():
