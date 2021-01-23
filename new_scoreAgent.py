@@ -227,6 +227,7 @@ class scoreEvaluator_with_train(nn.Module):
         self.data_scale = data_scale
         self.backbone = UNet_big(3, backbone_channel) # for image
         channel_size = backbone_channel + bin_size if corner_bin else backbone_channel
+        channel_size = channel_size + 2 if use_heat_map else channel_size
         self.cornerNet = corner_unet(backbone_channel=channel_size)
         self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
         self.img_cache = imgCache(datapath)
@@ -235,6 +236,11 @@ class scoreEvaluator_with_train(nn.Module):
         self.device = 'cpu'
         if self.corner_bin:
             self.corner_bin_Net = UNet_big(3, bin_size)
+        if use_heat_map:
+            self.heatmapNet = UNet_big(3, 2)
+
+    def getheatmap(self, img):
+        return self.heatmapNet(img)
 
     def getbinmap(self, img):
         return self.corner_bin_Net(img)
@@ -242,22 +248,27 @@ class scoreEvaluator_with_train(nn.Module):
     def imgvolume(self, img):
         return self.backbone(img)
 
-    def cornerEvaluator(self, mask, img_volume, binmap=None):
+    def cornerEvaluator(self, mask, img_volume, binmap=None, heatmap=None):
         '''
         :param mask: graph mask Nx2xhxw
         :return: Nx1xhxw
         '''
+        volume = img_volume
         if self.corner_bin:
-            out = self.cornerNet(mask, torch.cat((img_volume, binmap), 1))
-        else:
-            out = self.cornerNet(mask, img_volume)
+            volume = torch.cat((volume, binmap), 1)
+        if use_heat_map:
+            volume = torch.cat((volume, heatmap), 1)
+        out = self.cornerNet(mask, volume)
         return out
 
-    def edgeEvaluator(self, edge_mask, mask, img_volume, corner_map, edge_bin, binmap=None):
+    def edgeEvaluator(self, edge_mask, mask, img_volume, corner_map, edge_bin, binmap=None, heatmap=None):
+        volume = img_volume
         if self.corner_bin:
-            out = self.edgeNet(edge_mask, mask, torch.cat((img_volume, binmap),1), corner_map, edge_bin)
-        else:
-            out = self.edgeNet(edge_mask, mask, img_volume, corner_map, edge_bin)
+            volume = torch.cat((volume, binmap), 1)
+        if use_heat_map:
+            volume = torch.cat((volume, heatmap), 1)
+
+        out = self.edgeNet(edge_mask, mask, volume, corner_map, edge_bin)
         return out
 
     def regionEvaluator(self):
@@ -310,7 +321,12 @@ class scoreEvaluator_with_train(nn.Module):
                 bin_map = self.getbinmap(img)
             else:
                 bin_map = None
-            corner_pred = self.cornerEvaluator(mask, img_volume, bin_map)
+            if use_heat_map:
+                heatmap = self.getheatmap(img)
+            else:
+                heatmap = None
+
+            corner_pred = self.cornerEvaluator(mask, img_volume, binmap=bin_map, heatmap=heatmap)
         corner_map = corner_pred.cpu().detach().numpy()[0][0]
         corner_state = self.corner_map2score(corners, corner_map)
         graph.store_score(corner_score=corner_state)
@@ -337,24 +353,26 @@ class scoreEvaluator_with_train(nn.Module):
                 inputs.append(temp_mask)
             edge_input_mask = np.concatenate(inputs, 0)
             edge_input_mask = torch.cuda.FloatTensor(edge_input_mask, device=self.device)
+            expand_shape = edge_input_mask.shape[0]
             with torch.no_grad():
                 if self.corner_bin:
-                    edge_batch_pred = self.edgeEvaluator(
-                        edge_input_mask,
-                        mask.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        img_volume.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        corner_pred.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        torch.zeros(edge_input_mask.shape[0],self.edge_bin_size, device=self.device),
-                        bin_map.expand(edge_input_mask.shape[0],-1,-1,-1)
-                    )
+                    bin_map_extend = bin_map.expand(expand_shape,-1,-1,-1)
                 else:
-                    edge_batch_pred = self.edgeEvaluator(
-                        edge_input_mask,
-                        mask.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        img_volume.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        corner_pred.expand(edge_input_mask.shape[0],-1,-1,-1),
-                        torch.zeros(edge_input_mask.shape[0],self.edge_bin_size, device=self.device)
-                    )
+                    bin_map_extend = None
+                if use_heat_map:
+                    heatmap_extend = heatmap.expand(expand_shape,-1,-1,-1)
+                else:
+                    heatmap_extend = None
+
+                edge_batch_pred = self.edgeEvaluator(
+                    edge_input_mask,
+                    mask.expand(expand_shape,-1,-1,-1),
+                    img_volume.expand(expand_shape,-1,-1,-1),
+                    corner_pred.expand(expand_shape,-1,-1,-1),
+                    torch.zeros(expand_shape,self.edge_bin_size, device=self.device),
+                    binmap=bin_map_extend,
+                    heatmap=heatmap_extend
+                )
             edge_batch_pred = edge_batch_pred.cpu().detach()
             edge_batch_score = edge_batch_pred.exp()[:,1]/edge_batch_pred.exp().sum(1)
             edge_batch_score = edge_batch_score.numpy()
@@ -396,6 +414,9 @@ class scoreEvaluator_with_train(nn.Module):
         if self.corner_bin:
             with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'binnet')), 'wb') as f:
                 torch.save(self.corner_bin_Net.state_dict(), f)
+        if use_heat_map:
+            with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'heatmapnet')), 'wb') as f:
+                torch.save(self.heatmapNet.state_dict(), f)
 
     def load_weight(self, path, prefix):
         with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'backbone')), 'rb') as f:
@@ -407,6 +428,9 @@ class scoreEvaluator_with_train(nn.Module):
         if self.corner_bin:
             with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'binnet')), 'rb') as f:
                 self.corner_bin_Net.load_state_dict(torch.load(f))
+        if use_heat_map:
+            with open(os.path.join(path, '{}_{}.pt'.format(prefix, 'heatmapnet')), 'rb') as f:
+                self.heatmapNet.load_state_dict(torch.load(f))
 
 
 class scoreEvaluator():

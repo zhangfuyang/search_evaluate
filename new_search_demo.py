@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 import pickle
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import cv2
 import torch
 from new_dataset import myDataset, trainSearchDataset
@@ -18,9 +18,7 @@ beam_depth = 8
 is_visualize = False
 is_save = True
 save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch/'
-data_scale = 1. #TODO: adapt to scale
 edge_bin_size = 36
-batch_size = 16
 phase = 'valid'
 prefix = '1'
 use_corner_bin_map = False
@@ -49,6 +47,8 @@ def search(evaluator):
     for idx, data in enumerate(search_loader):
         name = data['name'][0]
         print(name)
+        #if name != '1548722763.97':
+        #    continue
         graph_data = search_dataset.getDataByName(name)
         conv_data = graph_data['conv_data']
         corners = conv_data['corners']

@@ -8,17 +8,20 @@ beam_depth = 5
 data_scale = 1. #TODO: adapt to scale
 edge_bin_size = 36
 batch_size = 8
+SAFE_NUM = 3
+TWO_CORNER_MINIMUM_DISTANCE = 16
+score_weights = (1., 2., 100.)
 
 mode = 'strong'
 data_folder = '/local-scratch/fuyang/cities_dataset'
-save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_from_scratch_without_search/'.format(mode)
+save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_from_scratch_with_heatmap/'.format(mode)
 #pretrained_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_{}_constraint/'.format(mode)
 
 edge_strong_constraint = True if mode == 'strong' else False
-use_corner_bin_map = False
+use_heat_map = False
+use_bin_map = False
 bin_size = 36
 use_cross_loss = False
-
 
 
 config = {}

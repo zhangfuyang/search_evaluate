@@ -17,7 +17,6 @@ beam_depth = 10
 is_visualize = False
 is_save = True
 save_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_weak_constraint/'
-data_scale = 1. #TODO: adapt to scale
 max_epoch = 100
 edge_bin_size = 36
 batch_size = 16

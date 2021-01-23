@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from xml.dom import minidom
 
 base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch/valid_prefix_1_result'
 f = open(os.path.join(base_path, 'demo.html'), 'w')
@@ -15,11 +16,18 @@ for idx, name in enumerate(os.listdir(base_path)):
     gt_false_corner_num = info_['gt']['false_corner']
     gt_false_edge_num = info_['gt']['false_edge']
     gt_region_score = info_['gt']['region_score']
+
+    configxml = minidom.parse(os.path.join(base_path, '..', 'config.xml'))
+    score_weights = configxml.getElementsByTagName('score_weights')[0].getElementsByTagName('item')
+    corner_weight = score_weights[0].firstChild.data
+    edge_weight = score_weights[1].firstChild.data
+    region_weight = score_weights[2].firstChild.data
     f.write('<p><b><big>' + '&nbsp;'*50
             + name + '&nbsp;'*50 + 'gt: ' + str(gt_overall_score) +
             '&nbsp;'*50 + str(gt_false_corner_num) + '&nbsp;'*50 + str(gt_false_edge_num) +
             '&nbsp;'*50 + str(gt_region_score) + '&nbsp;'*50 +
-            'score = corner_score + 2edge_score + 100region_score' + '</big></b></p>') #TODO remove the hard code
+            'score = {}corner_score + {}edge_score + {}region_score'.format(corner_weight, edge_weight, region_weight) +
+            '</big></b></p>')
     f.write('<p>')
     if os.path.exists(os.path.join(base_path,name,'edge_heatmap.png')):
         f.write('<img src="' + os.path.join(name, 'edge_heatmap.png') + '" width="'+str(size)+'">')
@@ -134,7 +142,7 @@ for idx, name in enumerate(os.listdir(base_path)):
         f.write('</script>\n')
 
 
-    if idx == 50:
-        break
+    #if idx == 50:
+    #    break
 
 f.write('</html>')

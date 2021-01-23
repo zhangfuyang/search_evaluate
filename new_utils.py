@@ -7,9 +7,8 @@ import skimage
 import random
 import time
 from SVG_utils import svg_generate
+from new_config import *
 
-SAFE_NUM = 3
-TWO_CORNER_MINIMUM_DISTANCE = 16
 
 #########################################################################################
 ################################# General Functions #####################################
@@ -975,12 +974,12 @@ def adding_a_corner_from_parallel(candidate):
                 continue
 
             # get another two loc
-            locA = edgeA.x[0].x if \
+            locA = edgeA.x[1].x if \
                 l2_distance(edgeA.x[0].x, intersection_loc) < l2_distance(edgeA.x[1].x, intersection_loc) else \
-                edgeA.x[1].x
-            locB = edgeB.x[0].x if \
+                edgeA.x[0].x
+            locB = edgeB.x[1].x if \
                 l2_distance(edgeB.x[0].x, intersection_loc) < l2_distance(edgeB.x[1].x, intersection_loc) else \
-                edgeB.x[1].x
+                edgeB.x[0].x
 
             # get new loc
             new_loc = (locA[0]+locB[0]-intersection_loc[0], locA[1]+locB[1]-intersection_loc[1])
@@ -997,10 +996,10 @@ def adding_a_corner_from_parallel(candidate):
                 continue
             new_corner = new_candidate.addCorner_v2(new_corner)
             # get cornerA and cornerB from edgeA, edgeB
-            cornerA = edgeA.x[0] if l2_distance(edgeA.x[0].x, new_corner.x) < l2_distance(edgeA.x[1].x, new_corner.x) \
-                                else edgeA.x[1]
-            cornerB = edgeB.x[0] if l2_distance(edgeB.x[0].x, new_corner.x) < l2_distance(edgeB.x[1].x, new_corner.x) \
-                else edgeB.x[1]
+            cornerA = edgeA.x[1] if l2_distance(edgeA.x[0].x, intersection_loc) < l2_distance(edgeA.x[1].x, intersection_loc) \
+                                else edgeA.x[0]
+            cornerB = edgeB.x[1] if l2_distance(edgeB.x[0].x, intersection_loc) < l2_distance(edgeB.x[1].x, intersection_loc) \
+                else edgeB.x[0]
 
             # new edge can not be too short
             if l2_distance(cornerA.x, new_corner.x) < 12:
@@ -1353,7 +1352,7 @@ class Graph:
         region_score = 0
         for ele in self.__regions:
             region_score += ele.get_score()
-        return corner_score + 2*edge_score + 100*region_score
+        return score_weights[0]*corner_score + score_weights[1]*edge_score + score_weights[2]*region_score
 
     def corner_score(self):
         corner_score = 0

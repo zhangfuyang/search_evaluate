@@ -38,7 +38,6 @@ class trainSearchDataset(Dataset):
                 gt_data = np.load(os.path.join(gt_datapath, name+'.npy'), allow_pickle=True).tolist()
                 gt_data['corners'], gt_data['edges'] = sort_graph(gt_data['corners'], gt_data['edges'])
 
-                #TODO: if intersection add the x junction and split edges
                 corners = conv_data['corners']
                 edges = conv_data['edges']
 

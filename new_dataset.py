@@ -91,12 +91,22 @@ class trainSearchDataset(Dataset):
 
         # corner bin map
         #TODO: check correctness
+        out_data = {}
         if self.corner_bin:
             gt_data = self.ground_truth[name]
             gt_corners = gt_data['corners']
             corner_list_for_each_bin = data['corner_list_for_each_bin']
             bin_map = get_corner_bin_map(gt_corners, corner_list_for_each_bin, bin_size)
             bin_map = torch.FloatTensor(bin_map)
+            out_data['bin_map'] = bin_map
+
+        if use_heat_map:
+            gt_data = self.ground_truth[name]
+            gt_corners = gt_data['corners']
+            gt_edges = gt_data['edges']
+            heat_map = render(gt_corners, gt_edges, render_pad=0)
+            heat_map = torch.FloatTensor(heat_map)
+            out_data['gt_heat_map'] = heat_map
 
 
         img = torch.FloatTensor(img)
@@ -105,25 +115,14 @@ class trainSearchDataset(Dataset):
         gt_edge = torch.LongTensor(gt_edge)
         edge_mask = torch.FloatTensor(edge_mask)
 
-        if self.corner_bin:
-            return {
-                'img': img,
-                'mask': mask,
-                'corner_gt_mask': corner_gt_mask,
-                'gt_edge': gt_edge,
-                'edge_mask': edge_mask,
-                'name': name,
-                'bin_map': bin_map
-            }
+        out_data['img'] = img
+        out_data['mask'] = mask
+        out_data['corner_gt_mask'] = corner_gt_mask
+        out_data['gt_edge'] = gt_edge
+        out_data['edge_mask'] = edge_mask
+        out_data['name'] = name
 
-        return {
-            'img': img,
-            'mask': mask,
-            'corner_gt_mask': corner_gt_mask,
-            'gt_edge': gt_edge,
-            'edge_mask': edge_mask,
-            'name': name
-        }
+        return out_data
 
     def make_data(self, name, corners, edges):
         gt_data = self.ground_truth[name]

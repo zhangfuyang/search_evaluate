@@ -20,8 +20,7 @@ print(config)
 
 def test(dataloader, model, edge_bin_size):
     model.eval()
-    total_edge_loss = 0
-    total_corner_loss = 0
+    total_loss = {}
     batch_count = 0
     for idx, data in enumerate(dataloader):
         img = data['img'].to(model.device)
@@ -32,21 +31,67 @@ def test(dataloader, model, edge_bin_size):
 
         with torch.no_grad():
             img_volume = model.imgvolume(img)
-            corner_pred = model.cornerEvaluator(mask, img_volume)
+            if use_bin_map:
+                binmap = model.getbinmap(img)
+            else:
+                binmap = None
+            if use_heat_map:
+                heatmap = model.getheatmap(img)
+                gt_heat_map = data['gt_heat_map'].to(model.device)
+                heatmap_l = heatmaploss(heatmap, gt_heat_map)
+                if 'heatmap' not in total_loss.keys():
+                    total_loss['heatmap'] = heatmap_l.item()
+                else:
+                    total_loss['heatmap'] += heatmap_l.item()
+            else:
+                heatmap = None
+            corner_pred = model.cornerEvaluator(mask, img_volume, binmap=binmap, heatmap=heatmap)
             edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
-                                        torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device))
-            total_corner_loss += cornerloss(corner_pred, corner_gt_mask).item()
-            total_edge_loss += edgeloss(edge_pred, gt_edge).item()
+                                        torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device),
+                                            binmap=binmap, heatmap=heatmap)
+            if 'corner' not in total_loss.keys():
+                total_loss['corner'] = cornerloss(corner_pred, corner_gt_mask).item()
+            else:
+                total_loss['corner'] += cornerloss(corner_pred, corner_gt_mask).item()
+            if 'edge' not in total_loss.keys():
+                total_loss['edge'] = edgeloss(edge_pred, gt_edge).item()
+            else:
+                total_loss['edge'] += edgeloss(edge_pred, gt_edge).item()
+
+            if use_cross_loss:
+                pseudo_corner_map = heatmap[:,1:]
+                pseudo_edge_map = heatmap[:,0:1]
+
+                # edge pseudo
+                numerator = torch.mul((edge_mask+1)/2, pseudo_edge_map).sum(1).sum(1).sum(1)
+                denominator = ((edge_mask+1)/2).sum(1).sum(1).sum(1)
+                edge_gt_pseudo = numerator / denominator
+                edge_gt_pseudo = (edge_gt_pseudo > 0.8).long()
+                if 'edge_cross' not in total_loss.keys():
+                    total_loss['edge_cross'] = edgeloss(edge_pred, edge_gt_pseudo).item()
+                else:
+                    total_loss['edge_cross'] += edgeloss(edge_pred, edge_gt_pseudo).item()
+
+                # corner pseudo
+                corner_input_mask = (mask[:, 1:]+1)/2
+                corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
+                if 'corner_cross' not in total_loss.keys():
+                    total_loss['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo).item()
+                else:
+                    total_loss['corner_cross'] += cornerloss(corner_pred, corner_gt_pseudo).item()
+
             batch_count += 1
 
-    print('{}[TEST]{} corner_loss={} edge_loss={}'.format(Fore.GREEN, Style.RESET_ALL,
-                                                          round(total_corner_loss/batch_count, 2),
-                                                          round(total_edge_loss/batch_count, 2)))
+    print('{}[TEST]{}'.format(Fore.GREEN, Style.RESET_ALL), end=' ')
+    for key in total_loss.keys():
+        print('{}={}'.format(key, round(total_loss[key]/batch_count, 3)), end=' ')
+    print('')
+
+    return total_loss['edge']/batch_count
 
 def train(dataloader, model, edge_bin_size):
     model.train()
-    total_edge_loss = 0
-    total_corner_loss = 0
+    total_loss = {}
     batch_count = 0
     for idx, data in enumerate(dataloader):
         img = data['img'].to(model.device)
@@ -57,33 +102,81 @@ def train(dataloader, model, edge_bin_size):
 
         optimizer.zero_grad()
 
+        loss_dict = {}
         img_volume = model.imgvolume(img)
-        if use_corner_bin_map:
+        if use_bin_map:
             binmap = model.getbinmap(img)
-            corner_pred = model.cornerEvaluator(mask, img_volume, binmap.detach())
-            edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
-                                            torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device),
-                                            binmap.detach())
+            binmap_detach = binmap.detach()
         else:
-            corner_pred = model.cornerEvaluator(mask, img_volume)
-            edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
-                                            torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device))
-        loss1 = cornerloss(corner_pred, corner_gt_mask)
-        loss2 = edgeloss(edge_pred, gt_edge)
+            binmap = None
+            binmap_detach = None
+        if use_heat_map:
+            heatmap = model.getheatmap(img)
+            heatmap_detach = heatmap.detach()
+            gt_heat_map = data['gt_heat_map'].to(model.device)
+            heatmap_l = heatmaploss(heatmap, gt_heat_map)
+            loss_dict['heatmap'] = heatmap_l
+        else:
+            heatmap = None
+            heatmap_detach = None
+        corner_pred = model.cornerEvaluator(mask, img_volume, binmap=binmap_detach, heatmap=heatmap_detach)
+        edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
+                                        torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device),
+                                        binmap=binmap_detach, heatmap=heatmap_detach)
+        corner_l = cornerloss(corner_pred, corner_gt_mask)
+        edge_l = edgeloss(edge_pred, gt_edge)
+        loss_dict['corner'] = corner_l
+        loss_dict['edge'] = edge_l
         if use_cross_loss:
-            pass #TODO
-        loss = 30*loss1 + loss2
-        if idx % 30 == 0:
-            print('[Batch {}/{}] Corner Loss={}; Edge Loss={}'.format(idx, len(dataloader), loss1.item(), loss2.item()))
-        total_corner_loss += loss1.item()
-        total_edge_loss += loss2.item()
+            pseudo_corner_map = heatmap.detach()[:,1:]
+            pseudo_edge_map = heatmap.detach()[:,0:1]
+
+            # edge pseudo
+            numerator = torch.mul((edge_mask+1)/2, pseudo_edge_map).sum(1).sum(1).sum(1)
+            denominator = ((edge_mask+1)/2).sum(1).sum(1).sum(1)
+            edge_gt_pseudo = numerator / denominator
+            edge_gt_pseudo = (edge_gt_pseudo > 0.8).long()
+            loss_dict['edge_cross'] = edgeloss(edge_pred, edge_gt_pseudo)
+
+            # corner pseudo
+            corner_input_mask = (mask[:, 1:]+1)/2
+            corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
+            loss_dict['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo)
+
+        loss = 0
+        for key in loss_dict.keys():
+            if key == 'corner':
+                loss += loss_dict[key] * 10
+            elif key == 'edge':
+                loss += loss_dict[key]
+            elif key == 'heatmap':
+                loss += loss_dict[key] * 5
+            elif key == 'edge_cross':
+                loss += loss_dict[key] * 0.5
+            elif key == 'corner_cross':
+                loss += loss_dict[key]
+
+        if idx % 50 == 0:
+            print('[Batch {}/{}]'.format(idx, len(dataloader)), end=' ')
+            for key in loss_dict.keys():
+                print('{}={}'.format(key, loss_dict[key].item()), end=' ')
+            print('')
+
+        for key in loss_dict.keys():
+            if key not in total_loss.keys():
+                total_loss[key] = loss_dict[key].item()
+            else:
+                total_loss[key] += loss_dict[key].item()
         batch_count += 1
 
         loss.backward()
         optimizer.step()
 
-    print('[Overall train] corner_loss={} edge_loss={}'.format(round(total_corner_loss/batch_count, 2),
-                                                          round(total_edge_loss/batch_count, 2)))
+    print('[Overall Train]', end=' ')
+    for key in total_loss.keys():
+        print('{}={}'.format(key, round(total_loss[key]/batch_count, 3)), end=' ')
+    print('')
+
 
 class trainThread(threading.Thread):
     def __init__(self, lock, evaluator, search_evaluator, new_data_memory, dataloader, dataset, testloader):
@@ -99,6 +192,7 @@ class trainThread(threading.Thread):
     def run(self):
         print('{}[training thread]{} start'.format(Fore.BLUE, Style.RESET_ALL))
         prefix = 0
+        testbest = 10
         while True:
             train_sample = 0
             for _ in range(4):
@@ -114,7 +208,7 @@ class trainThread(threading.Thread):
                 if train_sample >= MAX_DATA_STORAGE-1:
                     break
 
-            test(self.testloader, self.evaluator, edge_bin_size)
+            testacc = test(self.testloader, self.evaluator, edge_bin_size)
             print('{}[training thread]{} update searching evaluator'.format(Fore.BLUE, Style.RESET_ALL))
             print('{}[training thread]{} store weight with prefix={}'.format(Fore.BLUE, Style.RESET_ALL, prefix))
             if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'backbone'))):
@@ -125,6 +219,12 @@ class trainThread(threading.Thread):
                 os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'edge')))
             self.evaluator.store_weight(save_path, prefix)
             prefix += 1
+            if testacc < testbest:
+                testbest = testacc
+                self.evaluator.store_weight(save_path, 'best')
+                with open(os.path.join(save_path, 'best.txt'), 'w') as f:
+                    f.write('{} {}'.format(testbest, prefix))
+
 
 class searchThread(threading.Thread):
     def __init__(self, lock, evaluator, dataloader, new_data_memory, trainDataset, searchDataset):
@@ -356,11 +456,11 @@ class CrossLoss(nn.Module):
 
 print('process training data')
 train_dataset = trainSearchDataset(data_folder, data_scale=data_scale,
-                                   edge_strong_constraint=edge_strong_constraint, corner_bin=use_corner_bin_map)
+                                   edge_strong_constraint=edge_strong_constraint, corner_bin=False)
 print('process testing data')
 test_dataset = trainSearchDataset(data_folder, data_scale=data_scale,
                                   edge_strong_constraint=edge_strong_constraint, phase='valid',
-                                  corner_bin=use_corner_bin_map)
+                                  corner_bin=False)
 
 search_dataset = myDataset(data_folder, phase='train', edge_linewidth=2, render_pad=-1)
 
@@ -386,7 +486,7 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 # separate into two modules in order to use multiple threads to accelerate
 evaluator_train = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
-                                            corner_bin=use_corner_bin_map)
+                                            corner_bin=False)
 #evaluator_train.load_weight(pretrained_path, 10)
 
 evaluator_train.to('cuda:0')
@@ -394,6 +494,7 @@ evaluator_train.train()
 
 optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
 cornerloss = nn.L1Loss()
+heatmaploss = nn.MSELoss()
 edgeloss = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor([1., 3.], device=evaluator_train.device))
 if use_cross_loss:
     crossloss = CrossLoss()
@@ -402,6 +503,7 @@ os.makedirs(save_path, exist_ok=True)
 f = open(os.path.join(save_path, 'config.xml'), 'wb')
 f.write(dicttoxml(config))
 f.close()
+print('save config.xml done.')
 ######## start training and searching threads #####
 lock = threading.Lock()
 data_memory = []
@@ -409,6 +511,7 @@ data_memory = []
 st = searchThread(lock, None, search_loader, data_memory, train_dataset, search_dataset)
 tt = trainThread(lock, evaluator_train, None, data_memory, train_loader, train_dataset, test_loader)
 
+tt.run()
 if activate_search_thread:
     st.start()
 tt.start()
