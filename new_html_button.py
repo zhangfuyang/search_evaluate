@@ -2,7 +2,7 @@ import os
 import numpy as np
 from xml.dom import minidom
 
-base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch/valid_prefix_1_result'
+base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap/valid_prefix_1_result'
 f = open(os.path.join(base_path, 'demo.html'), 'w')
 
 size = 256
@@ -29,15 +29,15 @@ for idx, name in enumerate(os.listdir(base_path)):
             'score = {}corner_score + {}edge_score + {}region_score'.format(corner_weight, edge_weight, region_weight) +
             '</big></b></p>')
     f.write('<p>')
-    if os.path.exists(os.path.join(base_path,name,'edge_heatmap.png')):
-        f.write('<img src="' + os.path.join(name, 'edge_heatmap.png') + '" width="'+str(size)+'">')
-        f.write('<img src="' + os.path.join(name, 'maskrcnn.png') + '" width="'+str(size)+'">')
+
     f.write('&nbsp;<img src="' + os.path.join(name, 'image.jpg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'iter_0_num_0.svg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred.svg') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_corner.png') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_edge.png') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name,'gt_pred_region.png') + '" width="'+str(size)+'">')
+    if os.path.exists(os.path.join(base_path,name,'heatmap.png')):
+        f.write('<img src="' + os.path.join(name, 'heatmap.png') + '" width="'+str(size)+'">')
     f.write('&nbsp;<img src="' + os.path.join(name, 'maskrcnn.png') + '" width="'+str(size)+'">')
 
     f.write('</p>\n')

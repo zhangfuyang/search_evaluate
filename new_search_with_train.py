@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import random
 import cv2
 import torch
@@ -195,7 +195,7 @@ class trainThread(threading.Thread):
         testbest = 10
         while True:
             train_sample = 0
-            for _ in range(4):
+            for _ in range(3):
                 print('{}[training thread]{} New start {}! training with {} samples'.format(
                     Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
                 train(self.dataloader, self.evaluator, edge_bin_size)
@@ -446,14 +446,6 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
 
     np.save(os.path.join(base_path, 'config'), data)
 
-class CrossLoss(nn.Module):
-    def __init__(self):
-        super(CrossLoss, self).__init__()
-    def forward(self, corner_pred, ):
-        pass
-    #TODO edge segmentation and corner dir
-
-
 print('process training data')
 train_dataset = trainSearchDataset(data_folder, data_scale=data_scale,
                                    edge_strong_constraint=edge_strong_constraint, corner_bin=False)
@@ -496,8 +488,6 @@ optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
 cornerloss = nn.L1Loss()
 heatmaploss = nn.MSELoss()
 edgeloss = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor([1., 3.], device=evaluator_train.device))
-if use_cross_loss:
-    crossloss = CrossLoss()
 
 os.makedirs(save_path, exist_ok=True)
 f = open(os.path.join(save_path, 'config.xml'), 'wb')
@@ -511,7 +501,6 @@ data_memory = []
 st = searchThread(lock, None, search_loader, data_memory, train_dataset, search_dataset)
 tt = trainThread(lock, evaluator_train, None, data_memory, train_loader, train_dataset, test_loader)
 
-tt.run()
 if activate_search_thread:
     st.start()
 tt.start()

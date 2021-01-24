@@ -23,7 +23,7 @@ batch_size = 16
 phase = 'valid'
 edge_strong_constraint = False
 
-train_dataset = trainSearchDataset(data_folder, data_scale=data_scale, phase=phase,
+train_dataset = trainSearchDataset(data_folder, data_scale=1., phase=phase,
                                    edge_strong_constraint=edge_strong_constraint)
 
 train_loader = torch.utils.data.DataLoader(train_dataset,

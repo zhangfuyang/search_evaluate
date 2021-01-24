@@ -3,26 +3,26 @@ import matplotlib.pyplot as plt
 import time
 import os
 import pickle
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import cv2
+import skimage
 import torch
 from new_dataset import myDataset, trainSearchDataset
 from new_scoreAgent import scoreEvaluator_with_train
 from SVG_utils import svg_generate
 from new_utils import visualization, candidate_enumerate, reduce_duplicate_candidate, Graph, Candidate
+from new_config import *
 
 data_folder = '/local-scratch/fuyang/cities_dataset'
 maskrcnn_folder = '/local-scratch/fuyang/result/corner_edge_region/entire_region_mask'
 beam_width = 6
-beam_depth = 8
+beam_depth = 10
 is_visualize = False
 is_save = True
-save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch/'
+save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap/'
 edge_bin_size = 36
 phase = 'valid'
 prefix = '1'
-use_corner_bin_map = False
-bin_size = 36
 
 search_dataset = myDataset(data_folder, phase=phase, edge_linewidth=2, render_pad=-1)
 
@@ -37,7 +37,7 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 # separate into two modules in order to use multiple threads to accelerate
 evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
                                              backbone_channel=64, edge_bin_size=edge_bin_size,
-                                             corner_bin=use_corner_bin_map)
+                                             corner_bin=False)
 evaluator_search.load_weight(save_path, prefix)
 evaluator_search.to('cuda:0')
 evaluator_search.eval()
@@ -66,7 +66,6 @@ def search(evaluator):
 
         initial_candidate = Candidate.initial(Graph(corners, edges), name)
         evaluator.get_score(initial_candidate)
-
 
         # candidate gallery
         candidate_gallery = []
@@ -111,6 +110,27 @@ def search(evaluator):
             for candidate_ in prev_candidates:
                 candidate_.update() # update safe_count
             candidate_gallery.append(prev_candidates)
+
+
+        ################################ save heat map ###########################################
+        if use_heat_map:
+            img = skimage.img_as_float(plt.imread(os.path.join(data_folder, 'rgb', name+'.jpg')))
+            img = img.transpose((2,0,1))
+            img = (img - np.array(mean)[:, np.newaxis, np.newaxis]) / np.array(std)[:, np.newaxis, np.newaxis]
+            img = torch.cuda.FloatTensor(img, device=evaluator_search.device).unsqueeze(0)
+            with torch.no_grad():
+                heatmap = evaluator_search.getheatmap(img)
+            heatmap = heatmap[0].cpu().numpy()
+            heatmap = np.concatenate((heatmap, np.zeros((1,256,256))), 0).transpose(1,2,0)
+            fig = plt.figure(frameon=False)
+            fig.set_size_inches(1,1)
+            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(heatmap, aspect='auto')
+            os.makedirs(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name), exist_ok=True)
+            fig.savefig(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name, 'heatmap.png'), dpi=256)
+            plt.close()
 
 
         save_gallery(candidate_gallery, name,

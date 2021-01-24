@@ -89,8 +89,6 @@ class trainSearchDataset(Dataset):
         # direct learn segmentation from image, not include in the searching system
         # TODO: could add here as well
 
-        # corner bin map
-        #TODO: check correctness
         out_data = {}
         if self.corner_bin:
             gt_data = self.ground_truth[name]
@@ -211,6 +209,8 @@ class myDataset(Dataset):
         for idx, name in enumerate(namelist):
             if os.path.exists(os.path.join(conv_mpn_datapath, name+'.npy')):
                 conv_data = np.load(os.path.join(conv_mpn_datapath, name+'.npy'), allow_pickle=True).tolist()
+                conv_data['corners'], conv_data['edges'] = \
+                    remove_intersection_and_duplicate(conv_data['corners'], conv_data['edges'], name)
                 conv_data['corners'], conv_data['edges'] = sort_graph(conv_data['corners'], conv_data['edges'])
                 gt_data = np.load(os.path.join(gt_datapath, name+'.npy'), allow_pickle=True).tolist()
                 gt_data['corners'], gt_data['edges'] = sort_graph(gt_data['corners'], gt_data['edges'])
