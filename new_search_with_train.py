@@ -152,7 +152,7 @@ def train(dataloader, model, edge_bin_size):
             elif key == 'heatmap':
                 loss += loss_dict[key] * 5
             elif key == 'edge_cross':
-                loss += loss_dict[key] * 0.5
+                loss += loss_dict[key] * 0.1
             elif key == 'corner_cross':
                 loss += loss_dict[key]
 
@@ -205,7 +205,7 @@ class trainThread(threading.Thread):
                     self.dataset.add_processed_data(data)
                 self.lock.release()
                 train_sample += len(self.dataset)
-                if train_sample >= MAX_DATA_STORAGE-1:
+                if train_sample >= MAX_DATA_STORAGE/2:
                     break
 
             testacc = test(self.testloader, self.evaluator, edge_bin_size)

@@ -22,7 +22,7 @@ is_save = True
 save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap/'
 edge_bin_size = 36
 phase = 'valid'
-prefix = '1'
+prefix = '8'
 
 search_dataset = myDataset(data_folder, phase=phase, edge_linewidth=2, render_pad=-1)
 
@@ -147,9 +147,9 @@ def save_candidate_image(candidate, base_path, base_name):
     svg.saveas(os.path.join(base_path, base_name+'.svg'))
     # corner image
     temp_mask = np.zeros((256,256))
+    temp_mask[0:8,:] = np.arange(256)/255
     for ele in candidate.graph.getCorners():
-        if ele.get_score() < 0:
-            temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, 1, -1)
+        temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, (-ele.get_score()+1)/2, -1)
     fig = plt.figure(frameon=False)
     fig.set_size_inches(1,1)
     ax = plt.Axes(fig, [0.,0.,1.,1.])
@@ -159,11 +159,11 @@ def save_candidate_image(candidate, base_path, base_name):
     fig.savefig(os.path.join(base_path, base_name+'_corner.png'), dpi=256)
     # edges image
     temp_mask = np.zeros((256,256))
+    temp_mask[0:8,:] = np.arange(256)/255
     for ele in candidate.graph.getEdges():
-        if ele.get_score() < 0:
-            A = ele.x[0]
-            B = ele.x[1]
-            temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], 1, thickness=1)
+        A = ele.x[0]
+        B = ele.x[1]
+        temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], (-ele.get_score()+1)/2, thickness=2)
     ax.imshow(temp_mask, aspect='auto')
     fig.savefig(os.path.join(base_path, base_name+'_edge.png'), dpi=256)
     # region no need fig
