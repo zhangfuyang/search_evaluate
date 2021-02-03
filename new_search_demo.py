@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import time
 import os
 import pickle
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import cv2
 import skimage
 import torch
@@ -19,10 +20,12 @@ beam_width = 6
 beam_depth = 10
 is_visualize = False
 is_save = True
-save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap/'
+save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_new_1_27/'
 edge_bin_size = 36
 phase = 'valid'
-prefix = '8'
+prefix = 'best'
+
+print(save_path, prefix)
 
 search_dataset = myDataset(data_folder, phase=phase, edge_linewidth=2, render_pad=-1)
 
@@ -47,7 +50,9 @@ def search(evaluator):
     for idx, data in enumerate(search_loader):
         name = data['name'][0]
         print(name)
-        #if name != '1548722763.97':
+        if os.path.exists(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name)):
+            continue
+        # if name != '1548722763.97':
         #    continue
         graph_data = search_dataset.getDataByName(name)
         conv_data = graph_data['conv_data']
@@ -84,7 +89,6 @@ def search(evaluator):
             current_candidates = reduce_duplicate_candidate(current_candidates)
             print(epoch_i, len(current_candidates))
 
-
             for candidate_ in current_candidates:
                 evaluator.get_score(candidate_, all_edge=True)
 
@@ -99,7 +103,7 @@ def search(evaluator):
             if best_count == 4:
                 break
 
-            current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
+            current_candidates = sorted(current_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
             if len(current_candidates) < beam_width:
                 pick = np.arange(len(current_candidates))
             else:
@@ -108,35 +112,33 @@ def search(evaluator):
             prev_candidates = [current_candidates[_] for _ in pick]
 
             for candidate_ in prev_candidates:
-                candidate_.update() # update safe_count
+                candidate_.update()  # update safe_count
             candidate_gallery.append(prev_candidates)
-
 
         ################################ save heat map ###########################################
         if use_heat_map:
-            img = skimage.img_as_float(plt.imread(os.path.join(data_folder, 'rgb', name+'.jpg')))
-            img = img.transpose((2,0,1))
+            img = skimage.img_as_float(plt.imread(os.path.join(data_folder, 'rgb', name + '.jpg')))
+            img = img.transpose((2, 0, 1))
             img = (img - np.array(mean)[:, np.newaxis, np.newaxis]) / np.array(std)[:, np.newaxis, np.newaxis]
             img = torch.cuda.FloatTensor(img, device=evaluator_search.device).unsqueeze(0)
             with torch.no_grad():
                 heatmap = evaluator_search.getheatmap(img)
             heatmap = heatmap[0].cpu().numpy()
-            heatmap = np.concatenate((heatmap, np.zeros((1,256,256))), 0).transpose(1,2,0)
+            heatmap = np.concatenate((heatmap, np.zeros((1, 256, 256))), 0).transpose(1, 2, 0)
             fig = plt.figure(frameon=False)
-            fig.set_size_inches(1,1)
-            ax = plt.Axes(fig, [0.,0.,1.,1.])
+            fig.set_size_inches(1, 1)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
             ax.set_axis_off()
             fig.add_axes(ax)
             ax.imshow(heatmap, aspect='auto')
             os.makedirs(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name), exist_ok=True)
-            fig.savefig(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name, 'heatmap.png'), dpi=256)
+            fig.savefig(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name, 'heatmap.png'),
+                        dpi=256)
             plt.close()
-
 
         save_gallery(candidate_gallery, name,
                      os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix)),
                      best_candidates, gt_candidate)
-
 
 
 def save_candidate_image(candidate, base_path, base_name):
@@ -144,35 +146,37 @@ def save_candidate_image(candidate, base_path, base_name):
     edges = candidate.graph.getEdgesArray()
     # graph svg
     svg = svg_generate(corners, edges, base_name, samecolor=True)
-    svg.saveas(os.path.join(base_path, base_name+'.svg'))
+    svg.saveas(os.path.join(base_path, base_name + '.svg'))
     # corner image
-    temp_mask = np.zeros((256,256))
-    temp_mask[0:8,:] = np.arange(256)/255
+    temp_mask = np.zeros((256, 256))
+    temp_mask[0:8, :] = np.arange(256) / 255
     for ele in candidate.graph.getCorners():
-        temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, (-ele.get_score()+1)/2, -1)
+        temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, (-ele.get_score() + 1) / 2, -1)
     fig = plt.figure(frameon=False)
-    fig.set_size_inches(1,1)
-    ax = plt.Axes(fig, [0.,0.,1.,1.])
+    fig.set_size_inches(1, 1)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
     ax.set_axis_off()
     fig.add_axes(ax)
     ax.imshow(temp_mask, aspect='auto')
-    fig.savefig(os.path.join(base_path, base_name+'_corner.png'), dpi=256)
+    fig.savefig(os.path.join(base_path, base_name + '_corner.png'), dpi=256)
     # edges image
-    temp_mask = np.zeros((256,256))
-    temp_mask[0:8,:] = np.arange(256)/255
+    temp_mask = np.zeros((256, 256))
+    temp_mask[0:8, :] = np.arange(256) / 255
     for ele in candidate.graph.getEdges():
         A = ele.x[0]
         B = ele.x[1]
-        temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], (-ele.get_score()+1)/2, thickness=2)
+        temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], (-ele.get_score() + 1) / 2, thickness=2)
     ax.imshow(temp_mask, aspect='auto')
-    fig.savefig(os.path.join(base_path, base_name+'_edge.png'), dpi=256)
+    fig.savefig(os.path.join(base_path, base_name + '_edge.png'), dpi=256)
     # region no need fig
     plt.close()
+
 
 def save_candidate(candidate, name):
     f = open(name, 'wb')
     pickle.dump(candidate, f)
     f.close()
+
 
 def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candidate):
     os.makedirs(save_path, exist_ok=True)
@@ -180,34 +184,33 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
     os.makedirs(base_path, exist_ok=True)
 
     ############################### Image & MaskRcnn ####################################
-    img_path = os.path.join(data_folder, 'rgb', name+'.jpg')
+    img_path = os.path.join(data_folder, 'rgb', name + '.jpg')
     img = plt.imread(img_path)
     plt.imsave(os.path.join(base_path, 'image.jpg'), img)
 
-    img_path = os.path.join(maskrcnn_folder, name+'.png')
+    img_path = os.path.join(maskrcnn_folder, name + '.png')
     img = plt.imread(img_path)
     plt.imsave(os.path.join(base_path, 'maskrcnn.png'), img)
-
 
     ##################################### GT ############################################
     base_name = 'gt_pred'
     save_candidate_image(gt_candidate, base_path, base_name)
-    save_candidate(gt_candidate, os.path.join(base_path, base_name+'.obj'))
+    save_candidate(gt_candidate, os.path.join(base_path, base_name + '.obj'))
 
     ################################### search ##########################################
     for k in range(len(candidate_gallery)):
         current_candidates = candidate_gallery[k]
         for idx, candidate_ in enumerate(current_candidates):
-            base_name = 'iter_'+str(k)+'_num_'+str(idx)
+            base_name = 'iter_' + str(k) + '_num_' + str(idx)
             save_candidate_image(candidate_, base_path, base_name)
-            save_candidate(candidate_, os.path.join(base_path, base_name+'.obj'))
+            save_candidate(candidate_, os.path.join(base_path, base_name + '.obj'))
 
     #################################### best ###########################################
     for k in range(len(best_candidates)):
         candidate_ = best_candidates[k]
-        base_name = 'best_'+str(k)
+        base_name = 'best_' + str(k)
         save_candidate_image(candidate_, base_path, base_name)
-        save_candidate(candidate_, os.path.join(base_path,base_name+'.obj'))
+        save_candidate(candidate_, os.path.join(base_path, base_name + '.obj'))
 
     ################################ save config ########################################
     data = {}
@@ -216,7 +219,7 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
     edge_count = 0
     for ele in gt_candidate.graph.getCorners():
         if ele.get_score() < 0:
-            corner_count +=1
+            corner_count += 1
     for ele in gt_candidate.graph.getEdges():
         if ele.get_score() < 0:
             edge_count += 1
@@ -235,7 +238,7 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
             edge_count = 0
             for ele in candidate_.graph.getCorners():
                 if ele.get_score() < 0:
-                    corner_count +=1
+                    corner_count += 1
             for ele in candidate_.graph.getEdges():
                 if ele.get_score() < 0:
                     edge_count += 1
@@ -252,7 +255,7 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
         edge_count = 0
         for ele in candidate_.graph.getCorners():
             if ele.get_score() < 0:
-                corner_count +=1
+                corner_count += 1
         for ele in candidate_.graph.getEdges():
             if ele.get_score() < 0:
                 edge_count += 1
@@ -267,5 +270,3 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
 
 
 search(evaluator_search)
-
-

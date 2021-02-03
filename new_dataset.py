@@ -102,9 +102,12 @@ class trainSearchDataset(Dataset):
             gt_data = self.ground_truth[name]
             gt_corners = gt_data['corners']
             gt_edges = gt_data['edges']
-            heat_map = render(gt_corners, gt_edges, render_pad=0)
+            heat_map = render(gt_corners, gt_edges, render_pad=0, corner_size=5, edge_linewidth=3)
             heat_map = torch.FloatTensor(heat_map)
             out_data['gt_heat_map'] = heat_map
+            coord = np.round(corners[edges[id_]]).astype(np.int)
+            coord = torch.LongTensor(coord)
+            out_data['edge_corner_coord_for_heatmap'] = coord
 
 
         img = torch.FloatTensor(img)

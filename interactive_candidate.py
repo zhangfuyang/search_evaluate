@@ -48,7 +48,7 @@ class render_interactive():
             temp_mask[0:8,:] = np.arange(256)/255
             for ele in curr_candidate.graph.getCorners():
                 temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, (-ele.get_score()+1)/2, -1)
-            ax4.imshow(temp_mask, cmap='gray', vmin=0, vmax=1)
+            ax4.imshow(temp_mask, vmin=0, vmax=1)
             ax4.set_title(str(self.curr_candidate.graph.corner_score()))
             # edge map
             temp_mask = np.zeros((256,256))
@@ -57,7 +57,7 @@ class render_interactive():
                 A = ele.x[0]
                 B = ele.x[1]
                 temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], (-ele.get_score()+1)/2, thickness=2)
-            ax5.imshow(temp_mask, cmap='gray', vmin=0, vmax=1)
+            ax5.imshow(temp_mask, vmin=0, vmax=1)
             ax5.set_title(str(self.curr_candidate.graph.edge_score()))
 
             ax6.set_title(str(self.curr_candidate.graph.region_score()))
@@ -158,7 +158,7 @@ class render_interactive():
         temp_mask[0:8,:] = np.arange(256)/255
         for ele in self.curr_candidate.graph.getCorners():
             temp_mask = cv2.circle(temp_mask, ele.x[::-1], 3, (-ele.get_score()+1)/2, -1)
-        ax4.imshow(temp_mask, cmap='gray', vmin=0, vmax=1)
+        ax4.imshow(temp_mask, vmin=0, vmax=1)
         ax4.set_title(str(self.curr_candidate.graph.corner_score()))
         # edge map
         ax5 = fig.add_subplot(235)
@@ -168,7 +168,7 @@ class render_interactive():
             A = ele.x[0]
             B = ele.x[1]
             temp_mask = cv2.line(temp_mask, A.x[::-1], B.x[::-1], (-ele.get_score()+1)/2, thickness=2)
-        ax5.imshow(temp_mask, cmap='gray', vmin=0, vmax=1)
+        ax5.imshow(temp_mask, vmin=0, vmax=1)
         ax5.set_title(str(self.curr_candidate.graph.edge_score()))
 
         # maskrcnn
@@ -180,14 +180,14 @@ class render_interactive():
         plt.close()
 
 
-f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap/' \
-         'valid_prefix_1_result/1554866122.07/iter_0_num_0.obj'
+f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_grad_to_heatmap_big/' \
+         'valid_prefix_6_result/1549083497.91/best_0.obj'
 #f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint/valid_result/1553902528.15/iter_0_num_0.obj'
 f = open(f_name, 'rb')
-save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_from_scratch_with_heatmap'
+save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_grad_to_heatmap_big'
 evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
                                              backbone_channel=64, edge_bin_size=36)
-evaluator_search.load_weight(save_path, '1')
+evaluator_search.load_weight(save_path, '6')
 evaluator_search.to('cuda:0')
 evaluator_search.eval()
 candidate_ = pickle.load(f)

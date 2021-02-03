@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import random
 import cv2
 import torch
@@ -106,13 +106,13 @@ def train(dataloader, model, edge_bin_size):
         img_volume = model.imgvolume(img)
         if use_bin_map:
             binmap = model.getbinmap(img)
-            binmap_detach = binmap.detach()
+            binmap_detach = binmap
         else:
             binmap = None
             binmap_detach = None
         if use_heat_map:
             heatmap = model.getheatmap(img)
-            heatmap_detach = heatmap.detach()
+            heatmap_detach = heatmap
             gt_heat_map = data['gt_heat_map'].to(model.device)
             heatmap_l = heatmaploss(heatmap, gt_heat_map)
             loss_dict['heatmap'] = heatmap_l
@@ -135,13 +135,19 @@ def train(dataloader, model, edge_bin_size):
             numerator = torch.mul((edge_mask+1)/2, pseudo_edge_map).sum(1).sum(1).sum(1)
             denominator = ((edge_mask+1)/2).sum(1).sum(1).sum(1)
             edge_gt_pseudo = numerator / denominator
-            edge_gt_pseudo = (edge_gt_pseudo > 0.8).long()
+            coord = data['edge_corner_coord_for_heatmap']
+            index = torch.arange(coord.shape[0]).unsqueeze(1).expand(-1,2)
+            pseudo_corner_score = pseudo_corner_map[index, 0, coord[index[:,0],:,0], coord[index[:,1],:,1]]
+            pseudo_corner_score = pseudo_corner_score > 0.8
+            pseudo_corner_score = pseudo_corner_score[:,0] & pseudo_corner_score[:,1] # two corners must all be classified as True
+            edge_gt_pseudo = ((edge_gt_pseudo > 0.8) & pseudo_corner_score).long()
             loss_dict['edge_cross'] = edgeloss(edge_pred, edge_gt_pseudo)
 
             # corner pseudo
-            corner_input_mask = (mask[:, 1:]+1)/2
-            corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
-            loss_dict['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo)
+            ### test ###
+            #corner_input_mask = (mask[:, 1:]+1)/2
+            #corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
+            #loss_dict['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo)
 
         loss = 0
         for key in loss_dict.keys():
@@ -203,6 +209,8 @@ class trainThread(threading.Thread):
                 while len(self.new_data_memory) != 0:
                     data = self.new_data_memory.pop()
                     self.dataset.add_processed_data(data)
+                # update search evaluator
+                self.search_evaluator.load_state_dict(self.evaluator.state_dict())
                 self.lock.release()
                 train_sample += len(self.dataset)
                 if train_sample >= MAX_DATA_STORAGE/2:
@@ -274,33 +282,21 @@ class searchThread(threading.Thread):
                         break
                     current_candidates = reduce_duplicate_candidate(current_candidates)
 
+                    for candidate_ in current_candidates:
+                        self.lock.acquire()
+                        self.evaluator.get_score(candidate_, all_edge=True)
+                        self.lock.release()
 
-                    #for candidate_ in current_candidates:
-                    #    self.lock.acquire()
-                    #    self.evaluator.get_score(candidate_, all_edge=True)
-                    #    self.lock.release()
-
-                    #for candidate_i in range(len(current_candidates)):
-                    #    if best_candidates[0].graph.graph_score() < current_candidates[candidate_i].graph.graph_score():
-                    #        best_candidates = [current_candidates[candidate_i]]
-                    #    elif best_candidates[0].graph.graph_score() == current_candidates[candidate_i].graph.graph_score():
-                    #        best_candidates.append(current_candidates[candidate_i])
-
-                    #current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
-                    #if len(current_candidates) < beam_width:
-                    #    pick = np.arange(len(current_candidates))
-                    #else:
-                    #    pick = np.arange(beam_width)
-
-                    #prev_candidates = [current_candidates[_] for _ in pick]
-
-                    if len(current_candidates) > beam_width:
-                        prev_candidates = random.sample(current_candidates, beam_width)
+                    current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
+                    if len(current_candidates) < beam_width:
+                        pick = np.arange(len(current_candidates))
                     else:
-                        prev_candidates = current_candidates
+                        pick = np.arange(beam_width)
 
-                    # add random two into training dataset
-                    temp = random.choices(prev_candidates, k=2)
+                    prev_candidates = [current_candidates[_] for _ in pick]
+
+                    # temp = random.choices(prev_candidates, k=2)
+                    temp = prev_candidates[0:1]+prev_candidates[-1:]  # best and worst
                     for candidate_ in temp:
                         corners_array = candidate_.graph.getCornersArray()
                         edges_array = candidate_.graph.getEdgesArray()
@@ -321,7 +317,7 @@ class searchThread(threading.Thread):
 
 
                 search_count += 1
-                if (idx+1) % 100 == 0:
+                if (idx+1) % 1 == 0:
                     print('{}[seaching thread]{} Already search {} graphs and add {} '
                           'graphs into database'.format(Fore.RED, Style.RESET_ALL, search_count, add_count))
                     print('{}[seaching thread]{} {} remain in the swap'
@@ -479,10 +475,17 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 evaluator_train = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
+
+evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
+                                            backbone_channel=64, edge_bin_size=edge_bin_size,
+                                            corner_bin=False)
+evaluator_search.load_state_dict(evaluator_train.state_dict())
 #evaluator_train.load_weight(pretrained_path, 10)
 
 evaluator_train.to('cuda:0')
 evaluator_train.train()
+evaluator_search.to('cuda:1')
+evaluator_search.eval()
 
 optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
 cornerloss = nn.L1Loss()
@@ -498,8 +501,8 @@ print('save config.xml done.')
 lock = threading.Lock()
 data_memory = []
 
-st = searchThread(lock, None, search_loader, data_memory, train_dataset, search_dataset)
-tt = trainThread(lock, evaluator_train, None, data_memory, train_loader, train_dataset, test_loader)
+st = searchThread(lock, evaluator_search, search_loader, data_memory, train_dataset, search_dataset)
+tt = trainThread(lock, evaluator_train, evaluator_search, data_memory, train_loader, train_dataset, test_loader)
 
 if activate_search_thread:
     st.start()
