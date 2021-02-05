@@ -24,7 +24,7 @@ is_save = True
 save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_orthogonal/'
 edge_bin_size = 36
 phase = 'valid'
-prefix = '3'
+prefix = '2'
 use_smc = False
 save_name = '{}_prefix_{}_result'.format(phase, prefix)
 
@@ -107,9 +107,16 @@ def search(evaluator):
                 break
 
             if use_smc:
-                w = [candidate_.graph.graph_score() for candidate_ in current_candidates]
-                pick = random.choices(range(len(current_candidates)), weights=w, k=beam_width)
-                prev_candidates = [current_candidates[_] for _ in pick]
+                w = [candidate_.graph.graph_score() / 3 for candidate_ in current_candidates]
+                exp_w = np.exp(w)/np.exp(w).sum()
+                prev_candidates = []
+                while len(prev_candidates) != beam_width:
+                    if len(current_candidates) == 0:
+                        break
+                    pick = random.choices(range(len(current_candidates)), weights=exp_w, k=1)
+                    prev_candidates.append(current_candidates[pick[0]])
+                    current_candidates.pop(pick[0])
+                    exp_w = np.delete(exp_w, pick[0])
                 prev_candidates = sorted(prev_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
             else:
                 current_candidates = sorted(current_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
