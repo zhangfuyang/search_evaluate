@@ -1,10 +1,11 @@
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 import time
 import os
 import pickle
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import cv2
 import skimage
 import torch
@@ -20,19 +21,21 @@ beam_width = 6
 beam_depth = 10
 is_visualize = False
 is_save = True
-save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_new_1_27/'
+save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_orthogonal/'
 edge_bin_size = 36
 phase = 'valid'
-prefix = 'best'
+prefix = '3'
+use_smc = False
+save_name = '{}_prefix_{}_result'.format(phase, prefix)
 
-print(save_path, prefix)
+print(save_path, save_name)
 
 search_dataset = myDataset(data_folder, phase=phase, edge_linewidth=2, render_pad=-1)
 
 search_loader = torch.utils.data.DataLoader(search_dataset,
                                             batch_size=1,
                                             shuffle=False,
-                                            num_workers=1,
+                                            num_workers=0,
                                             drop_last=False)
 
 # evaluator_train is used for training
@@ -50,9 +53,9 @@ def search(evaluator):
     for idx, data in enumerate(search_loader):
         name = data['name'][0]
         print(name)
-        if os.path.exists(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name)):
+        if os.path.exists(os.path.join(save_path, save_name, name)):
             continue
-        # if name != '1548722763.97':
+        #if name != '1554144971.94':
         #    continue
         graph_data = search_dataset.getDataByName(name)
         conv_data = graph_data['conv_data']
@@ -103,13 +106,19 @@ def search(evaluator):
             if best_count == 4:
                 break
 
-            current_candidates = sorted(current_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
-            if len(current_candidates) < beam_width:
-                pick = np.arange(len(current_candidates))
+            if use_smc:
+                w = [candidate_.graph.graph_score() for candidate_ in current_candidates]
+                pick = random.choices(range(len(current_candidates)), weights=w, k=beam_width)
+                prev_candidates = [current_candidates[_] for _ in pick]
+                prev_candidates = sorted(prev_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
             else:
-                pick = np.arange(beam_width)
+                current_candidates = sorted(current_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
+                if len(current_candidates) < beam_width:
+                    pick = np.arange(len(current_candidates))
+                else:
+                    pick = np.arange(beam_width)
 
-            prev_candidates = [current_candidates[_] for _ in pick]
+                prev_candidates = [current_candidates[_] for _ in pick]
 
             for candidate_ in prev_candidates:
                 candidate_.update()  # update safe_count
@@ -131,13 +140,13 @@ def search(evaluator):
             ax.set_axis_off()
             fig.add_axes(ax)
             ax.imshow(heatmap, aspect='auto')
-            os.makedirs(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name), exist_ok=True)
-            fig.savefig(os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix), name, 'heatmap.png'),
+            os.makedirs(os.path.join(save_path, save_name, name), exist_ok=True)
+            fig.savefig(os.path.join(save_path, save_name, name, 'heatmap.png'),
                         dpi=256)
             plt.close()
 
         save_gallery(candidate_gallery, name,
-                     os.path.join(save_path, '{}_prefix_{}_result'.format(phase, prefix)),
+                     os.path.join(save_path, save_name),
                      best_candidates, gt_candidate)
 
 

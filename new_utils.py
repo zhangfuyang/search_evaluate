@@ -40,6 +40,17 @@ def swap_two_edge_place(edges, id1, id2):
     edges[id2] = temp
     return edges
 
+def degree_of_three_corners(cornerA, cornerB, cornerM):
+    # cornerM is middle corner
+    AM_length = l2_distance(cornerA, cornerM)
+    BM_length = l2_distance(cornerB, cornerM)
+    dot = np.dot((cornerA[0]-cornerM[0], cornerA[1]-cornerM[1]),
+                 (cornerB[0]-cornerM[0], cornerB[1]-cornerM[1]))
+    cos = dot / (AM_length+1e-8) / (BM_length+1e-8)
+    cos = min(1, max(-1, cos))
+    degree = np.arccos(cos)
+    return degree / np.pi * 180
+
 
 def sort_graph(corners, edges):
     corners = corners.copy()
@@ -731,6 +742,9 @@ def removing_a_colinear_corner_operation(candidate):
         if candidate.removable(the_corner): # NO NEED TO CHECK IF COLINEAR and graph.checkColinearCorner(the_corner):
             try:
                 new_ = candidate.generate_new_candidate_remove_a_colinear_corner(the_corner)
+
+                if new_.graph.checkIntersectionEdge():
+                    continue
                 new_candidates.append(new_)
             except:
                 continue
@@ -895,11 +909,14 @@ def adding_a_corner_from_two_edges_extension(candidate):
                 cornerB = new_edgeB.x[1]
 
             # new edge can not be too short
-            if l2_distance(cornerA.x, new_corner.x) < 12:
+            if l2_distance(cornerA.x, new_corner.x) < 7:
                 continue
-            if l2_distance(cornerB.x, new_corner.x) < 12:
+            if l2_distance(cornerB.x, new_corner.x) < 7:
                 continue
 
+            # new intersection cannot be too flat
+            if degree_of_three_corners(cornerA.x, cornerB.x, new_corner.x) > 165:
+                continue
 
             flag = False
             for edge_ele in new_graph.getEdges():
@@ -1052,6 +1069,72 @@ def adding_a_corner_from_parallel(candidate):
             new_candidates.append(new_candidate)
     return new_candidates
 
+def adding_a_orthogonal_edge(candidate):
+    new_candidates = []
+    graph = candidate.graph
+    edges = candidate.graph.getEdges()
+    for edge in edges:
+        cornerA = edge.x[0]
+        cornerB = edge.x[1]
+
+        # get orthogonal direction
+        dir_ = (cornerA.x[1]-cornerB.x[1], cornerB.x[0]-cornerA.x[0])
+
+        for the_corner in edge.x:
+            temp_orth_loc = (the_corner.x[0]-dir_[0], the_corner.x[1]-dir_[1])
+            for inter_edge in edges:
+                if inter_edge == edge:
+                    continue
+                if the_corner in inter_edge.x:
+                    continue
+                intersection_loc = get_two_edge_intersection_location(
+                    the_corner.x, temp_orth_loc, inter_edge.x[0].x, inter_edge.x[1].x
+                )
+                if intersection_loc[0] >= 255 or intersection_loc[1] >= 255 or \
+                        intersection_loc[0] <= 0 or intersection_loc[1] <= 0:
+                    continue
+                if np.dot((inter_edge.x[0].x[0]-intersection_loc[0], inter_edge.x[0].x[1]-intersection_loc[1]),
+                          (inter_edge.x[1].x[0]-intersection_loc[0], inter_edge.x[1].x[1]-intersection_loc[1])) > 0:
+                    # which means the intersection is not inside inter_edge but at the edge extension
+                    continue
+                if l2_distance(intersection_loc, inter_edge.x[0].x) < 5 or \
+                    l2_distance(intersection_loc, inter_edge.x[1].x) < 5:
+                    continue
+
+                # no thin degree with neighbor edge
+                flag = False
+                neighbor_corners = graph.getNeighborCorner(the_corner)
+                for corner_ele in neighbor_corners:
+                    if corner_ele in edge.x:
+                        continue
+                    if degree_of_three_corners(corner_ele.x, intersection_loc, the_corner.x) < 15:
+                        flag = True
+                        break
+                    if degree_of_three_corners(corner_ele.x, intersection_loc, the_corner.x) > 165:
+                        flag = True
+                        break
+                if flag:
+                    continue
+
+                new_candidate = candidate.copy()
+                new_graph = new_candidate.graph
+                new_corner = Element(intersection_loc)
+                if new_candidate.addable(new_corner) is False:
+                    continue
+                new_corner = new_candidate.addCorner_v2(new_corner)
+
+                # new edge can not be too short
+                if l2_distance(new_corner.x, the_corner.x) < 7:
+                    continue
+
+                add_edge = new_candidate.addEdge(new_corner, new_graph.getRealElement(the_corner))
+                if new_graph.checkIntersectionEdge(add_edge):
+                    continue
+
+                new_candidates.append(new_candidate)
+    return new_candidates
+
+
 class _thread(threading.Thread):
     def __init__(self, threadID, name, candidate, lock, result_list, func):
         threading.Thread.__init__(self)
@@ -1127,7 +1210,16 @@ def candidate_enumerate_training(candidate, gt):
             new_candidates.append(random.choice(new_))
     except:
         print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+
+    # add a orthogonal edge
+    try:
+        new_ = adding_a_orthogonal_edge(candidate)
+        if len(new_) > 0:
+            new_candidates.append(random.choice(new_))
+    except:
+        print('something wrong with add a orthogonal edge !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     return new_candidates
+
 
 def candidate_enumerate(candidate):
     new_candidates = []
@@ -1135,10 +1227,9 @@ def candidate_enumerate(candidate):
     new_candidates.extend(removing_a_colinear_corner_operation(candidate))
     new_candidates.extend(removing_an_edge_operation(candidate))
     new_candidates.extend(adding_an_edge_operation(candidate))
-    #new_candidates.extend(adding_a_corner_by_triangle_operation(candidate))
-    #new_candidates.extend(adding_an_edge_from_new_corner_operation(candidate))
     new_candidates.extend(adding_a_corner_from_two_edges_extension(candidate))
     new_candidates.extend(adding_a_corner_from_parallel(candidate))
+    new_candidates.extend(adding_a_orthogonal_edge(candidate))
 
     return new_candidates
 
@@ -1490,7 +1581,13 @@ class Graph:
             return True
         return False
 
-    def checkIntersectionEdge(self, ele):
+    def checkIntersectionEdge(self, ele=None):
+        if ele is None:
+            for edge_i in range(len(self.__edges)):
+                for edge_j in range(edge_i+1, len(self.__edges)):
+                    if check_intersection(self.__edges[edge_i], self.__edges[edge_j]):
+                        return True
+            return False
         for edge_ele in self.__edges:
             if ele == edge_ele:
                 continue
@@ -1520,6 +1617,15 @@ class Graph:
             if ele in out_:
                 out_.remove(ele)
             return out_
+
+    def getNeighborCorner(self, ele):
+        out_ = set()
+        for edge_ele in self.__edges:
+            if ele == edge_ele.x[0]:
+                out_.add(edge_ele.x[1])
+            if ele == edge_ele.x[1]:
+                out_.add(edge_ele.x[0])
+        return out_
 
     def getRealElement(self, ele):
         #edge

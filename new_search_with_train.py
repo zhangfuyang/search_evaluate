@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
 import random
 import cv2
 import torch
@@ -210,7 +210,8 @@ class trainThread(threading.Thread):
                     data = self.new_data_memory.pop()
                     self.dataset.add_processed_data(data)
                 # update search evaluator
-                self.search_evaluator.load_state_dict(self.evaluator.state_dict())
+                if search_with_evaluator:
+                    self.search_evaluator.load_state_dict(self.evaluator.state_dict())
                 self.lock.release()
                 train_sample += len(self.dataset)
                 if train_sample >= MAX_DATA_STORAGE/2:
@@ -219,19 +220,21 @@ class trainThread(threading.Thread):
             testacc = test(self.testloader, self.evaluator, edge_bin_size)
             print('{}[training thread]{} update searching evaluator'.format(Fore.BLUE, Style.RESET_ALL))
             print('{}[training thread]{} store weight with prefix={}'.format(Fore.BLUE, Style.RESET_ALL, prefix))
-            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'backbone'))):
-                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'backbone')))
-            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'corner'))):
-                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'corner')))
-            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'edge'))):
-                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-7, 'edge')))
+            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'backbone'))):
+                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'backbone')))
+            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'corner'))):
+                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'corner')))
+            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'edge'))):
+                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'edge')))
+            if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'heatmapnet'))):
+                os.remove(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'heatmapnet')))
             self.evaluator.store_weight(save_path, prefix)
-            prefix += 1
             if testacc < testbest:
                 testbest = testacc
                 self.evaluator.store_weight(save_path, 'best')
                 with open(os.path.join(save_path, 'best.txt'), 'w') as f:
                     f.write('{} {}'.format(testbest, prefix))
+            prefix += 1
 
 
 class searchThread(threading.Thread):
@@ -282,21 +285,26 @@ class searchThread(threading.Thread):
                         break
                     current_candidates = reduce_duplicate_candidate(current_candidates)
 
-                    for candidate_ in current_candidates:
-                        self.lock.acquire()
-                        self.evaluator.get_score(candidate_, all_edge=True)
-                        self.lock.release()
+                    if search_with_evaluator:
+                        for candidate_ in current_candidates:
+                            self.lock.acquire()
+                            self.evaluator.get_score(candidate_, all_edge=True)
+                            self.lock.release()
+                        current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
+                        if len(current_candidates) < beam_width:
+                            pick = np.arange(len(current_candidates))
+                        else:
+                            pick = np.arange(beam_width)
 
-                    current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
-                    if len(current_candidates) < beam_width:
-                        pick = np.arange(len(current_candidates))
+                        prev_candidates = [current_candidates[_] for _ in pick]
+                        temp = prev_candidates[0:1]+prev_candidates[-1:]  # best and worst
                     else:
-                        pick = np.arange(beam_width)
+                        if len(current_candidates) > beam_width:
+                            prev_candidates = random.sample(current_candidates, beam_width)
+                        else:
+                            prev_candidates = current_candidates
+                        temp = random.choices(prev_candidates, k=2)
 
-                    prev_candidates = [current_candidates[_] for _ in pick]
-
-                    # temp = random.choices(prev_candidates, k=2)
-                    temp = prev_candidates[0:1]+prev_candidates[-1:]  # best and worst
                     for candidate_ in temp:
                         corners_array = candidate_.graph.getCornersArray()
                         edges_array = candidate_.graph.getEdgesArray()
@@ -309,15 +317,14 @@ class searchThread(threading.Thread):
                         add_count += 1
 
                     for candidate_ in prev_candidates:
-                        candidate_.update() # update safe_count
+                        candidate_.update()  # update safe_count
                 #except:
                 #    print('{}[seaching thread] An error happened during searching, not sure yet, '
                 #          'skip!{}'.format(Fore.RED, Style.RESET_ALL))
                 #    continue
 
-
                 search_count += 1
-                if (idx+1) % 1 == 0:
+                if (idx+1) % 50 == 0:
                     print('{}[seaching thread]{} Already search {} graphs and add {} '
                           'graphs into database'.format(Fore.RED, Style.RESET_ALL, search_count, add_count))
                     print('{}[seaching thread]{} {} remain in the swap'
@@ -475,17 +482,19 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 evaluator_train = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
-
-evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
-                                            backbone_channel=64, edge_bin_size=edge_bin_size,
-                                            corner_bin=False)
-evaluator_search.load_state_dict(evaluator_train.state_dict())
+if search_with_evaluator:
+    evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
+                                                backbone_channel=64, edge_bin_size=edge_bin_size,
+                                                corner_bin=False)
+    evaluator_search.load_state_dict(evaluator_train.state_dict())
+    evaluator_search.to('cuda:1')
+    evaluator_search.eval()
+else:
+    evaluator_search = None
 #evaluator_train.load_weight(pretrained_path, 10)
 
 evaluator_train.to('cuda:0')
 evaluator_train.train()
-evaluator_search.to('cuda:1')
-evaluator_search.eval()
 
 optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
 cornerloss = nn.L1Loss()

@@ -180,8 +180,8 @@ class render_interactive():
         plt.close()
 
 
-f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_grad_to_heatmap_big/' \
-         'valid_prefix_6_result/1549083497.91/best_0.obj'
+f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_without_corner_heatmap/' \
+         'valid_prefix_4_result/1554266277.87/iter_0_num_0.obj'
 #f_name = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint/valid_result/1553902528.15/iter_0_num_0.obj'
 f = open(f_name, 'rb')
 save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_grad_to_heatmap_big'
