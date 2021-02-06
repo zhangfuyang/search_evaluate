@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 from new_utils import *
 
-base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_without_corner_heatmap/valid_prefix_4_result'
+base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_without_corner_heatmap/valid_prefix_5_result'
 datapath = '/local-scratch/fuyang/cities_dataset'
 #obj_name = 'iter_0_num_0.obj'
 obj_name = 'best_0.obj'

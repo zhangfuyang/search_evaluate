@@ -2,7 +2,7 @@ import os
 import numpy as np
 from xml.dom import minidom
 
-base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_orthogonal/valid_prefix_3_result'
+base_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_orthogonal/valid_prefix_7_result'
 f = open(os.path.join(base_path, 'demo.html'), 'w')
 
 size = 256

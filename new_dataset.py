@@ -53,8 +53,8 @@ class trainSearchDataset(Dataset):
                 gt_edges = gt_data['edges']
 
                 self.ground_truth[name] = gt_data
-                self.add_data(name, corners, edges)
-                self.add_data(name, gt_corners, gt_edges)
+                #self.add_data(name, corners, edges)
+                #self.add_data(name, gt_corners, gt_edges)
 
 
     def __len__(self):
@@ -125,51 +125,26 @@ class trainSearchDataset(Dataset):
 
         return out_data
 
-    def make_data(self, name, corners, edges):
+    def make_data(self, name, prev_corners, prev_edges, next_corners, next_edges):
         gt_data = self.ground_truth[name]
         corner_false_id, map_same_degree, map_same_location = get_wrong_corners(
-            corners, gt_data['corners'], edges, gt_data['edges'])
+            prev_corners, gt_data['corners'], prev_edges, gt_data['edges'])
 
         gt_corners, gt_edges = simplify_gt(map_same_location, gt_data['corners'], gt_data['edges'])
 
         corner_false_id, map_same_degree, map_same_location = get_wrong_corners(
-            corners, gt_corners, edges, gt_edges)
+            prev_corners, gt_corners, prev_edges, gt_edges)
 
         if self.edge_strong_constraint:
             edge_false_id = get_wrong_edges(
-                corners, gt_corners, edges, gt_edges,
+                prev_corners, gt_corners, prev_edges, gt_edges,
                 map_same_degree)
         else:
             edge_false_id = get_wrong_edges(
-                corners, gt_corners, edges, gt_edges,
+                prev_corners, gt_corners, prev_edges, gt_edges,
                 map_same_location)
 
-        if self.corner_bin:
-            gt_data = self.ground_truth[name]
-            gt_corners = gt_data['corners']
-            gt_edges = gt_data['edges']
-
-            # get corner dir for each corner
-            dirs = []
-            for corner_i in range(gt_corners.shape[0]):
-                t = np.where(gt_edges==corner_i)
-                neighbor_ids = gt_edges[t[0], 1-t[1]]
-                neighbor_corner = gt_corners[neighbor_ids]
-                the_corner = gt_corners[corner_i]
-                vec = neighbor_corner - the_corner
-                theta = ((np.arctan2(vec[:,0], vec[:,1])/np.pi+1)*180+bin_size//2) % 360
-                the_bin = (theta / bin_size).astype(np.int)
-                dirs.append(the_bin)
-
-            corner_list_for_each_bin = []
-            for bin_i in range(bin_size):
-                cur = []
-                for corner_i in range(gt_corners.shape[0]):
-                    if bin_i in dirs[corner_i]:
-                        cur.append(corner_i)
-                corner_list_for_each_bin.append(cur)
-        else:
-            corner_list_for_each_bin = None
+        corner_list_for_each_bin = None
 
         return {'name': name, 'corners': corners, 'edges': edges,
                               'corner_false_id': list(corner_false_id),

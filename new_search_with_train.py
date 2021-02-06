@@ -11,7 +11,7 @@ from new_scoreAgent import scoreEvaluator_with_train
 import torch.nn as nn
 import threading
 from SVG_utils import svg_generate
-from new_utils import visualization, candidate_enumerate_training, reduce_duplicate_candidate, Graph, Candidate
+from new_utils import visualization, candidate_enumerate, reduce_duplicate_candidate, Graph, Candidate
 from colorama import Fore, Style
 from dicttoxml import dicttoxml
 from new_config import *
@@ -196,10 +196,17 @@ class trainThread(threading.Thread):
         self.testloader = testloader
 
     def run(self):
-        print('{}[training thread]{} start'.format(Fore.BLUE, Style.RESET_ALL))
+        print('{}[training thread]{} wait for initial data'.format(Fore.BLUE, Style.RESET_ALL))
         prefix = 0
         testbest = 10
         while True:
+            if len(self.dataset) < 1000:
+                while len(self.new_data_memory) != 0:
+                    data = self.new_data_memory.pop()
+                    self.dataset.add_processed_data(data)
+                continue
+            print('{}[training thread]{} start training'.format(
+                    Fore.BLUE, Style.RESET_ALL))
             train_sample = 0
             for _ in range(3):
                 print('{}[training thread]{} New start {}! training with {} samples'.format(
@@ -279,42 +286,35 @@ class searchThread(threading.Thread):
                         prev_ = prev_candidates[prev_i]
                         if len(prev_.graph.getCorners()) == 0 or len(prev_.graph.getEdges()) == 0:
                             continue
-                        current_candidates.extend(candidate_enumerate_training(prev_, gt_data))
-
-                    if len(current_candidates) == 0:
-                        break
-                    current_candidates = reduce_duplicate_candidate(current_candidates)
-
-                    if search_with_evaluator:
-                        for candidate_ in current_candidates:
+                        next_candidates = candidate_enumerate(prev_)
+                        for candidate_ in next_candidates:
                             self.lock.acquire()
                             self.evaluator.get_score(candidate_, all_edge=True)
                             self.lock.release()
-                        current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
-                        if len(current_candidates) < beam_width:
-                            pick = np.arange(len(current_candidates))
-                        else:
-                            pick = np.arange(beam_width)
+                        next_candidates = sorted(next_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
+                        # pick the best as S_{t+1}
+                        next_ = next_candidates[0]
 
-                        prev_candidates = [current_candidates[_] for _ in pick]
-                        temp = prev_candidates[0:1]+prev_candidates[-1:]  # best and worst
-                    else:
-                        if len(current_candidates) > beam_width:
-                            prev_candidates = random.sample(current_candidates, beam_width)
-                        else:
-                            prev_candidates = current_candidates
-                        temp = random.choices(prev_candidates, k=2)
-
-                    for candidate_ in temp:
-                        corners_array = candidate_.graph.getCornersArray()
-                        edges_array = candidate_.graph.getEdgesArray()
-                        if corners_array.shape[0] == 0 or edges_array.shape[0] == 0:
-                            continue
-                        data = self.train_dataset.make_data(candidate_.name, corners_array, edges_array)
+                        prev_corners = prev_.graph.getCornersArray()
+                        prev_edges = prev_.graph.getEdgesArray()
+                        next_corners = next_.graph.getCornersArray()
+                        next_edges = next_.graph.getEdgesArray()
                         self.lock.acquire()
+                        data = self.train_dataset.make_data(prev_.name, prev_corners, prev_edges, next_corners, next_edges)
                         self.new_data_memory.append(data)
                         self.lock.release()
                         add_count += 1
+
+                        current_candidates.extend(next_candidates)
+
+                    current_candidates = reduce_duplicate_candidate(current_candidates)
+
+                    if len(current_candidates) == 0:
+                        break
+                    if len(current_candidates) > beam_width:
+                        prev_candidates = random.sample(current_candidates, beam_width)
+                    else:
+                        prev_candidates = current_candidates
 
                     for candidate_ in prev_candidates:
                         candidate_.update()  # update safe_count
@@ -330,16 +330,6 @@ class searchThread(threading.Thread):
                     print('{}[seaching thread]{} {} remain in the swap'
                           ' memory'.format(Fore.RED, Style.RESET_ALL, len(self.new_data_memory)))
 
-                #if save_count <= 20:
-                #    save_count += 1
-                #    print('{}[seaching thread]{} Save sample {} into {} with '
-                #          'depth={}'.format(Fore.RED, Style.RESET_ALL, name,
-                #                            str(self.curr_state['save_count'])+'_checkpoint',len(candidate_gallery)-1))
-                #    gt_candidate = Candidate.initial(Graph(gt_corners, gt_edges), name)
-                #    self.evaluator.get_score(gt_candidate)
-                #    save_gallery(candidate_gallery, name,
-                #                 os.path.join(save_path, 'search_demo', str(self.curr_state['save_count'])+'_checkpoint'),
-                #                 best_candidates, gt_candidate)
 
 def save_candidate_image(candidate, base_path, base_name):
     corners = candidate.graph.getCornersArray()

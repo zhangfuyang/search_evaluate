@@ -21,10 +21,10 @@ beam_width = 6
 beam_depth = 10
 is_visualize = False
 is_save = True
-save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_orthogonal/'
+save_path = '/local-scratch/fuyang/result/beam_search_v2/strong_constraint_heatmap_without_corner_heatmap/'
 edge_bin_size = 36
 phase = 'valid'
-prefix = '2'
+prefix = 'best'
 use_smc = False
 save_name = '{}_prefix_{}_result'.format(phase, prefix)
 
