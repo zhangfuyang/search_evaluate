@@ -53,30 +53,43 @@ class trainSearchDataset(Dataset):
                 gt_edges = gt_data['edges']
 
                 self.ground_truth[name] = gt_data
-                self.add_data(name, corners, edges)
-                self.add_data(name, gt_corners, gt_edges)
+                #self.add_data(name, corners, edges)
+                #self.add_data(name, gt_corners, gt_edges)
 
 
     def __len__(self):
+        if len(self.database) == 0:
+            return 1
         return len(self.database)
 
     def __getitem__(self, idx):
+        #print(idx)
+        #print(len(self.database))
+        #print('------------')
         data = self.database[idx]
         name = data['name']
         corners = data['corners']
         edges = data['edges']
         corner_false_id = data['corner_false_id']
         edge_false_id = data['edge_false_id']
+        next_corners = data['next_corners']
+        next_edges = data['next_edges']             
+
 
         img = skimage.img_as_float(plt.imread(os.path.join(self.datapath, 'rgb', name+'.jpg')))
         #img = skimage.transform.rescale(img, self.data_scale, multichannel=True)
         img = img.transpose((2,0,1))
         img = (img - np.array(mean)[:, np.newaxis, np.newaxis]) / np.array(std)[:, np.newaxis, np.newaxis]
 
-        mask = render(corners, edges, render_pad=-1, scale=self.data_scale)
-
         noise = torch.rand(corners.shape)*4-2  #[-2,2]
         corners = corners + noise.numpy()
+
+        noise_ = torch.rand(next_corners.shape)*4-2  #[-2,2]
+        next_corners = next_corners + noise_.numpy()
+
+        mask = render(corners, edges, render_pad=-1, scale=self.data_scale)
+        next_mask = render(next_corners, next_edges, render_pad=-1, scale=self.data_scale)
+
         ### corner ###
         corner_gt_mask = render(corners[corner_false_id], np.array([]), render_pad=0, scale=self.data_scale)[1:]
 
@@ -85,18 +98,33 @@ class trainSearchDataset(Dataset):
         gt_edge = [1 if id_ in edge_false_id else 0]
         edge_mask = render(corners, edges[[id_]], render_pad=-1, scale=self.data_scale)[0:1]
 
+        old_corner_id = edges[id_]
+        old_corner_pos = corners[old_corner_id]
+
+        
+        has_remove = False
+        #TODO: test
+        for corner_i in range(2):
+            old_pos = old_corner_pos[corner_i]
+            # find id that has same loc in next_corner
+            diff = np.abs(old_pos-next_corners)
+            where = np.where(np.logical_and(diff[:,0]<6, diff[:,1]<6))[0]
+
+            if where.shape[0] == 0:
+                has_remove = True
+                break
+        
+        if has_remove:
+            next_edge_mask = np.zeros_like(edge_mask)
+        else:
+            next_edge_mask = edge_mask
+
+
         ### region ###
         # direct learn segmentation from image, not include in the searching system
         # TODO: could add here as well
 
         out_data = {}
-        if self.corner_bin:
-            gt_data = self.ground_truth[name]
-            gt_corners = gt_data['corners']
-            corner_list_for_each_bin = data['corner_list_for_each_bin']
-            bin_map = get_corner_bin_map(gt_corners, corner_list_for_each_bin, bin_size)
-            bin_map = torch.FloatTensor(bin_map)
-            out_data['bin_map'] = bin_map
 
         if use_heat_map:
             gt_data = self.ground_truth[name]
@@ -115,18 +143,23 @@ class trainSearchDataset(Dataset):
         corner_gt_mask = torch.FloatTensor(corner_gt_mask)
         gt_edge = torch.LongTensor(gt_edge)
         edge_mask = torch.FloatTensor(edge_mask)
-
+        next_edge_mask = torch.FloatTensor(next_edge_mask)
+        next_mask = torch.FloatTensor(next_mask)
+    
         out_data['img'] = img
         out_data['mask'] = mask
+        out_data['next_mask'] = next_mask
         out_data['corner_gt_mask'] = corner_gt_mask
         out_data['gt_edge'] = gt_edge
         out_data['edge_mask'] = edge_mask
+        out_data['next_edge_mask'] = next_edge_mask
         out_data['name'] = name
 
         return out_data
 
-    def make_data(self, name, corners, edges):
+    def make_data(self, name, corners, edges, next_corners, next_edges): #name, corners, edges):
         gt_data = self.ground_truth[name]
+
         corner_false_id, map_same_degree, map_same_location = get_wrong_corners(
             corners, gt_data['corners'], edges, gt_data['edges'])
 
@@ -143,7 +176,7 @@ class trainSearchDataset(Dataset):
             edge_false_id = get_wrong_edges(
                 corners, gt_corners, edges, gt_edges,
                 map_same_location)
-
+        '''
         if self.corner_bin:
             gt_data = self.ground_truth[name]
             gt_corners = gt_data['corners']
@@ -169,12 +202,16 @@ class trainSearchDataset(Dataset):
                         cur.append(corner_i)
                 corner_list_for_each_bin.append(cur)
         else:
-            corner_list_for_each_bin = None
+        '''
+        corner_list_for_each_bin = None
 
         return {'name': name, 'corners': corners, 'edges': edges,
                               'corner_false_id': list(corner_false_id),
                               'edge_false_id': edge_false_id,
-                              'corner_list_for_each_bin':corner_list_for_each_bin}
+                              'corner_list_for_each_bin':corner_list_for_each_bin,
+                              'next_corners': next_corners,
+                              'next_edges': next_edges}
+
 
     def add_processed_data(self, data):
         if len(self.database) >= MAX_DATA_STORAGE:
@@ -241,7 +278,7 @@ class myDataset(Dataset):
         #gt_mask_original = render(gt_data['corners']+noise,
         #                          gt_data['edges'], self.render_pad, self.edge_linewidth)
 
-        img = skimage.img_as_float(plt.imread(os.path.join('/local-scratch/fuyang/cities_dataset/rgb', name+'.jpg')))
+        img = skimage.img_as_float(plt.imread(os.path.join('/local-scratch/project/datasets/cities_dataset/rgb', name+'.jpg')))
         ### test ###
         #plt.subplot(121)
         #plt.imshow(input_edge_mask.transpose(1,2,0))
