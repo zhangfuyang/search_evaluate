@@ -3,18 +3,19 @@ std = [0.229, 0.224, 0.225]
 MAX_DATA_STORAGE = 60000
 
 activate_search_thread = True
-search_with_evaluator = True
-beam_width = 10  # for search thread
+beam_width = 5  # for search thread
 beam_depth = 5  # for search thread
 data_scale = 1. #TODO: adapt to scale
 edge_bin_size = 36
 batch_size = 4
+gamma = 0.5
 SAFE_NUM = 3
 TWO_CORNER_MINIMUM_DISTANCE = 5
 score_weights = (1., 2., 100.)
 
+base_path = '/local-scratch/fuyang'  # '/local-scratch/project/datasets/cities_dataset/'
 mode = 'strong'
-data_folder = '/local-scratch/fuyang/cities_dataset'
+data_folder = base_path + '/cities_dataset'
 save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_heatmap_orthogonal/'.format(mode)
 #pretrained_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_{}_constraint/'.format(mode)
 

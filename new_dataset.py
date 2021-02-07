@@ -63,9 +63,6 @@ class trainSearchDataset(Dataset):
         return len(self.database)
 
     def __getitem__(self, idx):
-        #print(idx)
-        #print(len(self.database))
-        #print('------------')
         data = self.database[idx]
         name = data['name']
         corners = data['corners']
@@ -101,19 +98,15 @@ class trainSearchDataset(Dataset):
         old_corner_id = edges[id_]
         old_corner_pos = corners[old_corner_id]
 
-        
         has_remove = False
-        #TODO: test
         for corner_i in range(2):
             old_pos = old_corner_pos[corner_i]
             # find id that has same loc in next_corner
-            diff = np.abs(old_pos-next_corners)
-            where = np.where(np.logical_and(diff[:,0]<6, diff[:,1]<6))[0]
-
-            if where.shape[0] == 0:
+            l2_d = np.linalg.norm(old_pos-next_corners, axis=1)
+            if np.min(l2_d) >= 6:
                 has_remove = True
                 break
-        
+
         if has_remove:
             next_edge_mask = np.zeros_like(edge_mask)
         else:
@@ -157,7 +150,7 @@ class trainSearchDataset(Dataset):
 
         return out_data
 
-    def make_data(self, name, corners, edges, next_corners, next_edges): #name, corners, edges):
+    def make_data(self, name, corners, edges, next_corners, next_edges):
         gt_data = self.ground_truth[name]
 
         corner_false_id, map_same_degree, map_same_location = get_wrong_corners(
@@ -176,33 +169,6 @@ class trainSearchDataset(Dataset):
             edge_false_id = get_wrong_edges(
                 corners, gt_corners, edges, gt_edges,
                 map_same_location)
-        '''
-        if self.corner_bin:
-            gt_data = self.ground_truth[name]
-            gt_corners = gt_data['corners']
-            gt_edges = gt_data['edges']
-
-            # get corner dir for each corner
-            dirs = []
-            for corner_i in range(gt_corners.shape[0]):
-                t = np.where(gt_edges==corner_i)
-                neighbor_ids = gt_edges[t[0], 1-t[1]]
-                neighbor_corner = gt_corners[neighbor_ids]
-                the_corner = gt_corners[corner_i]
-                vec = neighbor_corner - the_corner
-                theta = ((np.arctan2(vec[:,0], vec[:,1])/np.pi+1)*180+bin_size//2) % 360
-                the_bin = (theta / bin_size).astype(np.int)
-                dirs.append(the_bin)
-
-            corner_list_for_each_bin = []
-            for bin_i in range(bin_size):
-                cur = []
-                for corner_i in range(gt_corners.shape[0]):
-                    if bin_i in dirs[corner_i]:
-                        cur.append(corner_i)
-                corner_list_for_each_bin.append(cur)
-        else:
-        '''
         corner_list_for_each_bin = None
 
         return {'name': name, 'corners': corners, 'edges': edges,
@@ -278,7 +244,7 @@ class myDataset(Dataset):
         #gt_mask_original = render(gt_data['corners']+noise,
         #                          gt_data['edges'], self.render_pad, self.edge_linewidth)
 
-        img = skimage.img_as_float(plt.imread(os.path.join('/local-scratch/project/datasets/cities_dataset/rgb', name+'.jpg')))
+        img = skimage.img_as_float(plt.imread(os.path.join(self.datapath, 'rgb', name+'.jpg')))
         ### test ###
         #plt.subplot(121)
         #plt.imshow(input_edge_mask.transpose(1,2,0))
@@ -295,11 +261,5 @@ class myDataset(Dataset):
             'img': img,
             'name': name}
         return data
-
-
-if __name__ == '__main__':
-    traindataset = trainSearchDataset('/local-scratch/fuyang/cities_dataset', None, data_scale=1)
-    for i in range(traindataset.__len__()):
-        traindataset.__getitem__(i)
 
 

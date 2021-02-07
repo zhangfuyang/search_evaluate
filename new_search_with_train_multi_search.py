@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 import random
 import copy
 import cv2
@@ -150,8 +150,8 @@ def train(dataloader, old_model, model, edge_bin_size):
 
             next_corner_pred = old_model.cornerEvaluator(next_mask, next_img_volume, binmap=None, heatmap=next_heatmap_detach)
             next_edge_pred = old_model.edgeEvaluator(next_edge_mask, next_mask, next_img_volume, next_corner_pred.detach(),
-                                    torch.zeros(edge_mask.shape[0], edge_bin_size, device=old_model.device),
-                                    binmap=None, heatmap=next_heatmap_detach).detach().cpu()
+                                                     torch.zeros(edge_mask.shape[0], edge_bin_size, device=old_model.device),
+                                                     binmap=None, heatmap=next_heatmap_detach).detach().cpu()
 
         next_edge_pred = next_edge_pred.to(model.device)
         next_corner_pred = next_corner_pred.to(model.device)
@@ -224,11 +224,12 @@ def train(dataloader, old_model, model, edge_bin_size):
 
 
 class trainThread(threading.Thread):
-    def __init__(self, lock, evaluator, search_evaluator, prev_evaluator, new_data_memory, dataloader, dataset, testdataset):
+    def __init__(self, lock, evaluator, search_evaluator1, search_evaluator2, prev_evaluator, new_data_memory, dataloader, dataset, testdataset):
         super(trainThread, self).__init__()
         self.lock = lock
         self.evaluator = evaluator
-        self.search_evaluator = search_evaluator
+        self.search_evaluator1 = search_evaluator1
+        self.search_evaluator2 = search_evaluator2
         self.new_data_memory = new_data_memory
         self.dataloader = dataloader
         self.dataset = dataset
@@ -239,10 +240,10 @@ class trainThread(threading.Thread):
         print('{}[training thread]{} wait for initial data'.format(Fore.BLUE, Style.RESET_ALL))
         prefix = 0
         testbest = 0
-        #test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
+        test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
         while True:
             # pre-load data
-            while len(self.dataset) < 15:
+            while len(self.dataset) < 1500:
                 time.sleep(30)
                 while len(self.new_data_memory) != 0:
                     data = self.new_data_memory.pop()
@@ -250,23 +251,24 @@ class trainThread(threading.Thread):
                 continue
 
             print('{}[training thread]{} start training'.format(
-                    Fore.BLUE, Style.RESET_ALL))
+                Fore.BLUE, Style.RESET_ALL))
             train_sample = 0
             for _ in range(3):
                 print('{}[training thread]{} New start {}! training with {} samples'.format(
                     Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
                 self.lock.acquire()
-                self.prev_evaluator.load_state_dict(self.search_evaluator.state_dict())
+                self.prev_evaluator.load_state_dict(self.search_evaluator1.state_dict())
                 self.lock.release()
                 train(self.dataloader, self.prev_evaluator, self.evaluator, edge_bin_size)
-                
+
                 while len(self.new_data_memory) != 0:
                     data = self.new_data_memory.pop()
                     self.dataset.add_processed_data(data)
 
                 # update search evaluator
                 self.lock.acquire()
-                self.search_evaluator.load_state_dict(self.evaluator.state_dict())
+                self.search_evaluator1.load_state_dict(self.evaluator.state_dict())
+                self.search_evaluator2.load_state_dict(self.evaluator.state_dict())
                 self.lock.release()
 
                 train_sample += len(self.dataset)
@@ -493,19 +495,26 @@ train_dataset = trainSearchDataset(data_folder, data_scale=data_scale,
 print('process testing data')
 test_dataset = myDataset(data_folder, phase='valid', edge_linewidth=2, render_pad=-1)
 
-search_dataset = myDataset(data_folder, phase='train', edge_linewidth=2, render_pad=-1)
+search_dataset1 = myDataset(data_folder, phase='train', edge_linewidth=2, render_pad=-1)
+search_dataset2 = myDataset(data_folder, phase='train', edge_linewidth=2, render_pad=-1)
 
 train_loader = torch.utils.data.DataLoader(train_dataset,
-                                          batch_size=batch_size,
-                                          shuffle=True,
-                                          num_workers=4,
-                                          drop_last=False)
+                                           batch_size=batch_size,
+                                           shuffle=True,
+                                           num_workers=4,
+                                           drop_last=False)
 
-search_loader = torch.utils.data.DataLoader(search_dataset,
-                                          batch_size=1,
-                                          shuffle=True,
-                                          num_workers=0,
-                                          drop_last=False)
+search_loaders1 = torch.utils.data.DataLoader(search_dataset1,
+                                              batch_size=1,
+                                              shuffle=True,
+                                              num_workers=1,
+                                              drop_last=False)
+
+search_loaders2 = torch.utils.data.DataLoader(search_dataset2,
+                                              batch_size=1,
+                                              shuffle=True,
+                                              num_workers=1,
+                                              drop_last=False)
 
 # evaluator_train is used for training
 # evaluator_search is used for searching
@@ -513,18 +522,25 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 evaluator_train = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
-evaluator_search = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
-                                            backbone_channel=64, edge_bin_size=edge_bin_size,
-                                            corner_bin=False)
-evaluator_search.load_state_dict(evaluator_train.state_dict())
-evaluator_search.to('cuda:1')
-evaluator_search.eval()
+evaluator_search1 = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
+                                              backbone_channel=64, edge_bin_size=edge_bin_size,
+                                              corner_bin=False)
+evaluator_search1.load_state_dict(evaluator_train.state_dict())
+evaluator_search1.to('cuda:1')
+evaluator_search1.eval()
+
+evaluator_search2 = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
+                                              backbone_channel=64, edge_bin_size=edge_bin_size,
+                                              corner_bin=False)
+evaluator_search2.load_state_dict(evaluator_train.state_dict())
+evaluator_search2.to('cuda:2')
+evaluator_search2.eval()
 
 prev_evaluator = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
-                                             backbone_channel=64, edge_bin_size=edge_bin_size,
-                                             corner_bin=False)
-prev_evaluator.load_state_dict(evaluator_search.state_dict())
-prev_evaluator.to('cuda:1')
+                                           backbone_channel=64, edge_bin_size=edge_bin_size,
+                                           corner_bin=False)
+prev_evaluator.load_state_dict(evaluator_search1.state_dict())
+prev_evaluator.to('cuda:3')
 prev_evaluator.eval()
 
 
@@ -532,9 +548,9 @@ evaluator_train.to('cuda:0')
 evaluator_train.train()
 
 optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
-cornerloss = nn.SmoothL1Loss()
+cornerloss = nn.SmoothL1Loss(beta=0.5)
 heatmaploss = nn.MSELoss()
-edgeloss = nn.SmoothL1Loss()
+edgeloss = nn.SmoothL1Loss(beta=0.5)
 edge_psudo_loss = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor([1., 3.], device=evaluator_train.device))
 
 
@@ -547,11 +563,13 @@ print('save config.xml done.')
 lock = threading.Lock()
 data_memory = []
 
-st1 = searchThread(lock, evaluator_search, search_loader, data_memory, train_dataset, search_dataset)
+st1 = searchThread(lock, evaluator_search1, search_loaders1, data_memory, train_dataset, search_dataset1)
+st2 = searchThread(lock, evaluator_search2, search_loaders2, data_memory, train_dataset, search_dataset2)
 
-tt = trainThread(lock, evaluator_train, evaluator_search, prev_evaluator, data_memory, train_loader, train_dataset, test_dataset)
+tt = trainThread(lock, evaluator_train, evaluator_search1, evaluator_search2, prev_evaluator, data_memory, train_loader, train_dataset, test_dataset)
 
 # activate_search_thread:
 st1.start()
+st2.start()
 tt.start()
 

@@ -240,10 +240,6 @@ class corner_unet(nn.Module):
             #nn.Sigmoid()
         )
 
-
-       
-
-
     def forward(self, mask, image_volume):
         x1 = self.inc(mask)
         x2 = self.down1(torch.cat((x1, image_volume),1))
@@ -258,9 +254,6 @@ class corner_unet(nn.Module):
         x = self.up4(x, x2)
         x = self.up51(x)
         x = self.up52(torch.cat((x1,x),1))
-
-       
-       
         return self.out(x)
 
 
@@ -282,7 +275,7 @@ class scoreEvaluator_with_train(nn.Module):
         self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
         self.img_cache = imgCache(datapath)
         self.corner_bin = corner_bin
-        self.region_cache = regionCache('/local-scratch/project/datasets/cities_dataset/result/corner_edge_region/entire_region_mask')
+        self.region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
         self.device = 'cpu'
         if self.corner_bin:
             self.corner_bin_Net = UNet_big(3, bin_size)
@@ -353,8 +346,21 @@ class scoreEvaluator_with_train(nn.Module):
                 corner_state[corner_i] = heat.sum()/(heat.shape[0]*heat.shape[1])
         return corner_state
 
+    def get_score_list(self, candidate_list, all_edge=False):
+        first = candidate_list[0]
+        img = self.img_cache.get_image(first.name)
+        img = img.transpose((2,0,1))
+        img = (img - np.array(mean)[:, np.newaxis, np.newaxis]) / np.array(std)[:, np.newaxis, np.newaxis]
+        img = torch.cuda.FloatTensor(img, device=self.device).unsqueeze(0)
+        heatmap = None
+        with torch.no_grad():
+            img_volume = self.imgvolume(img)
+            if use_heat_map:
+                heatmap = self.getheatmap(img)
+        for candidate_ in candidate_list:
+            self.get_score(candidate_, all_edge=all_edge, img_volume=img_volume, heatmap=heatmap)
 
-    def get_score(self, candidate, all_edge=False):
+    def get_score(self, candidate, all_edge=False, img_volume=None, heatmap=None):
         graph = candidate.graph
         corners = graph.getCornersArray()
         edges = graph.getEdgesArray()
@@ -370,23 +376,17 @@ class scoreEvaluator_with_train(nn.Module):
 
         # corner and image volume
         with torch.no_grad():
-            img_volume = self.imgvolume(img)
-            if self.corner_bin:
-                bin_map = self.getbinmap(img)
-            else:
-                bin_map = None
-            if use_heat_map:
+            if img_volume is None:
+                img_volume = self.imgvolume(img)
+            bin_map = None
+            if use_heat_map and heatmap is None:
                 heatmap = self.getheatmap(img)
-            else:
-                heatmap = None
 
             corner_pred = self.cornerEvaluator(mask, img_volume, binmap=bin_map, heatmap=heatmap)
-
-       
         corner_map = corner_pred.cpu().detach().numpy()[0][0]
         corner_state = self.corner_map2score(corners, corner_map, False)
-      
-        # corner score 
+
+        # corner score
         graph.store_score(corner_score=corner_state)
 
         # edges that need to be predicted
@@ -431,14 +431,14 @@ class scoreEvaluator_with_train(nn.Module):
                     binmap=bin_map_extend,
                     heatmap=heatmap_extend
                 )
-            edge_batch_pred = edge_batch_pred.cpu().detach()  
+            edge_batch_pred = edge_batch_pred.cpu().detach()
             edge_batch_score = edge_batch_pred#.exp()[:,0]#/edge_batch_pred.exp().sum(1)
 
             edge_batch_score = edge_batch_score.numpy()
             for edge_i, update_i in enumerate(batch):
                 edge_ele = edge_update_list[update_i]
                 #edge_ele.store_score(1-2*edge_batch_score[edge_i]*edge_batch_score[edge_i])  # -1 to 1
-                # edge score 
+                # edge score
                 edge_ele.store_score(edge_batch_score[edge_i])
 
         # region
