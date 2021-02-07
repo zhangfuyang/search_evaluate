@@ -180,7 +180,7 @@ class edge_net(nn.Module):
             nn.LeakyReLU(inplace=True),
             nn.Linear(256, 256),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(256, 2)
+            nn.Linear(256, 1)
         )
         self.maxpool = nn.AdaptiveMaxPool2d((1,1))
 
@@ -216,6 +216,7 @@ class edge_net(nn.Module):
 
         return out
 
+
 class corner_unet(nn.Module):
     def __init__(self, bilinear=False, backbone_channel=64):
         super(corner_unet, self).__init__()
@@ -236,8 +237,12 @@ class corner_unet(nn.Module):
         self.up52 = DoubleConv(32+16, 32)
         self.out = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=1),
-            nn.Sigmoid()
+            #nn.Sigmoid()
         )
+
+
+       
+
 
     def forward(self, mask, image_volume):
         x1 = self.inc(mask)
@@ -245,13 +250,17 @@ class corner_unet(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
-        x6 = self.down5(x5)
+        x6 = self.down5(x5)  # x6: (1, 1024, 8, 8)
+
         x = self.up1(x6, x5)
         x = self.up2(x, x4)
         x = self.up3(x, x3)
         x = self.up4(x, x2)
         x = self.up51(x)
         x = self.up52(torch.cat((x1,x),1))
+
+       
+       
         return self.out(x)
 
 
@@ -273,7 +282,7 @@ class scoreEvaluator_with_train(nn.Module):
         self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
         self.img_cache = imgCache(datapath)
         self.corner_bin = corner_bin
-        self.region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
+        self.region_cache = regionCache('/local-scratch/project/datasets/cities_dataset/result/corner_edge_region/entire_region_mask')
         self.device = 'cpu'
         if self.corner_bin:
             self.corner_bin_Net = UNet_big(3, bin_size)
@@ -315,7 +324,7 @@ class scoreEvaluator_with_train(nn.Module):
     def regionEvaluator(self):
         pass
 
-    def corner_map2score(self, corners, corner_map):
+    def corner_map2score(self, corners, corner_map, classficiation=True):
         corner_state = np.ones(corners.shape[0])
         scale_corners = corners*self.data_scale
         for corner_i in range(scale_corners.shape[0]):
@@ -338,8 +347,12 @@ class scoreEvaluator_with_train(nn.Module):
             else:
                 y1 = loc[1] + 2
             heat = corner_map[x0:x1, y0:y1]
-            corner_state[corner_i] = 1-2*heat.sum()/(heat.shape[0]*heat.shape[1])
+            if classficiation:
+                corner_state[corner_i] = 1-2*heat.sum()/(heat.shape[0]*heat.shape[1])
+            else:
+                corner_state[corner_i] = heat.sum()/(heat.shape[0]*heat.shape[1])
         return corner_state
+
 
     def get_score(self, candidate, all_edge=False):
         graph = candidate.graph
@@ -368,8 +381,12 @@ class scoreEvaluator_with_train(nn.Module):
                 heatmap = None
 
             corner_pred = self.cornerEvaluator(mask, img_volume, binmap=bin_map, heatmap=heatmap)
+
+       
         corner_map = corner_pred.cpu().detach().numpy()[0][0]
-        corner_state = self.corner_map2score(corners, corner_map)
+        corner_state = self.corner_map2score(corners, corner_map, False)
+      
+        # corner score 
         graph.store_score(corner_score=corner_state)
 
         # edges that need to be predicted
@@ -414,12 +431,15 @@ class scoreEvaluator_with_train(nn.Module):
                     binmap=bin_map_extend,
                     heatmap=heatmap_extend
                 )
-            edge_batch_pred = edge_batch_pred.cpu().detach()
-            edge_batch_score = edge_batch_pred.exp()[:,1]/edge_batch_pred.exp().sum(1)
+            edge_batch_pred = edge_batch_pred.cpu().detach()  
+            edge_batch_score = edge_batch_pred#.exp()[:,0]#/edge_batch_pred.exp().sum(1)
+
             edge_batch_score = edge_batch_score.numpy()
             for edge_i, update_i in enumerate(batch):
                 edge_ele = edge_update_list[update_i]
-                edge_ele.store_score(1-2*edge_batch_score[edge_i]*edge_batch_score[edge_i])
+                #edge_ele.store_score(1-2*edge_batch_score[edge_i]*edge_batch_score[edge_i])  # -1 to 1
+                # edge score 
+                edge_ele.store_score(edge_batch_score[edge_i])
 
         # region
         gt_mask = self.region_cache.get_region(candidate.name)
