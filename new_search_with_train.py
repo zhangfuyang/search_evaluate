@@ -239,10 +239,10 @@ class trainThread(threading.Thread):
         print('{}[training thread]{} wait for initial data'.format(Fore.BLUE, Style.RESET_ALL))
         prefix = 0
         testbest = 0
-        #test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
+        test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
         while True:
             # pre-load data
-            while len(self.dataset) < 15:
+            while len(self.dataset) < 1500:
                 time.sleep(30)
                 while len(self.new_data_memory) != 0:
                     data = self.new_data_memory.pop()
