@@ -2,7 +2,7 @@
 
 [Feb 6]
 
-Changes:
+Changes (Xu):
 
 (1) modified get_score() in new_scoreAgent.py, current graph score is computed based on value function (not rewards).
 
