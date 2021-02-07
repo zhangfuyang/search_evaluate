@@ -2065,4 +2065,4 @@ class Candidate:
     def equal(self, candidate):
         return self.graph.equal(candidate.graph)
 
-region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
+region_cache = regionCache('/local-scratch/project/datasets/cities_dataset/result/corner_edge_region/entire_region_mask')
