@@ -99,13 +99,40 @@ class trainSearchDataset(Dataset):
         old_corner_pos = corners[old_corner_id]
 
         has_remove = False
-        for corner_i in range(2):
-            old_pos = old_corner_pos[corner_i]
-            # find id that has same loc in next_corner
-            l2_d = np.linalg.norm(old_pos-next_corners, axis=1)
-            if np.min(l2_d) >= 6:
+        if next_corners.shape[0] == 0:
+            has_remove = True
+        else:
+            new_id = np.array([-1,-1])
+            # see if corner has been removed
+            for corner_i in range(2):
+                old_pos = old_corner_pos[corner_i]
+                # find id that has same loc in next_corner
+                l2_d = np.linalg.norm(old_pos-next_corners, axis=1)
+                if np.min(l2_d) >= 6:
+                    has_remove = True
+                    break
+                new_id[corner_i] = np.argmin(l2_d)
+
+            # see if edge has been removed
+            find = False
+            for edge_i in range(next_edges.shape[0]):
+                if new_id[0] == next_edges[edge_i, 0] and new_id[1] == next_edges[edge_i, 1]:
+                    find = True
+                    break
+                if new_id[1] == next_edges[edge_i, 0] and new_id[0] == next_edges[edge_i, 1]:
+                    find = True
+                    break
+            if find is False:
                 has_remove = True
-                break
+        if has_remove and corners.shape[0] == next_corners.shape[0]:
+            print('------old-------')
+            print(corners)
+            print(edges)
+            print('pick id', id_)
+            print('-----next-------')
+            print(next_corners)
+            print(next_edges)
+            print('result', has_remove)
 
         if has_remove:
             next_edge_mask = np.zeros_like(edge_mask)

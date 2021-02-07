@@ -21,3 +21,28 @@
 - write test() function for testing. We randomly pick 10 graphs for searching (width=2, depth=6), and return f1 score of edge
 
 - split two files new_search_with_train.py (1 search thread), new_search_with_train_multi_thread.py (2 search threads)
+
+
+## [Feb 7]
+
+### Changes (Xu):
+
+### Changes (Zhang):
+
+- fix a bug in new_dataset.py, where finding the same edge in next_edges part
+
+- replace random search policy as beam search in searchThread, with 20% percent to random explore
+
+- put test() and train() into a new file new_train_test_func.py
+
+- add TD version of crossloss in train()
+
+- add some comment in new_config.py
+
+> new_config.py:
+>> use_heatmap=False. -> no heatmap prediction as well as crossloss
+>
+>> use_heatmap=True, use_cross_loss=False. -> activate heatmap prediction, but no crossloss
+> 
+>> use_heatmap=True, use_cross_loss=True. -> activate heatmap prediction as well as crossloss
+

@@ -14,16 +14,16 @@ TWO_CORNER_MINIMUM_DISTANCE = 5
 score_weights = (1., 2., 100.)
 
 base_path = '/local-scratch/fuyang'  # '/local-scratch/project/datasets/cities_dataset/'
-mode = 'strong'
+mode = 'strong' # use edge strong constraint (need direction and degree both correct), otherwise, only based on the location. Default is 'strong'
+edge_strong_constraint = True if mode == 'strong' else False
 data_folder = base_path + '/cities_dataset'
 save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_heatmap_orthogonal/'.format(mode)
 #pretrained_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_{}_constraint/'.format(mode)
 
-edge_strong_constraint = True if mode == 'strong' else False
-use_heat_map = True
-use_bin_map = False
-bin_size = 36
-use_cross_loss = use_heat_map
+use_heat_map = True  # predict heatmap as well, Default True
+use_bin_map = False # deprecated
+bin_size = 36 # deprecated
+use_cross_loss = use_heat_map & True # use heatmap pseudo loss, if use, use_heat_map must be set as True
 
 
 config = {}
