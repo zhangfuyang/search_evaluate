@@ -131,26 +131,35 @@ def train(dataloader, old_model, model, edge_bin_size):
                                         binmap=binmap_detach, heatmap=heatmap_detach)
 
 
-        next_img_volume = old_model.imgvolume(next_img)
-        binmap = None
-        binmap_detach = None
-        if use_heat_map:
-            next_heatmap = old_model.getheatmap(next_img)
-            next_heatmap_detach = next_heatmap
-        else:
-            next_heatmap = None
-            next_heatmap_detach = None
-        next_corner_pred = old_model.cornerEvaluator(next_mask, next_img_volume, binmap=binmap_detach, heatmap=next_heatmap_detach)
-        next_edge_pred = old_model.edgeEvaluator(next_edge_mask, next_mask, next_img_volume, next_corner_pred.detach(),
+        with torch.no_grad():
+            next_img_volume = old_model.imgvolume(img)
+            binmap = None
+            binmap_detach = None
+            if use_heat_map:
+                next_heatmap = old_model.getheatmap(img)
+                next_heatmap_detach = next_heatmap
+            else:
+                next_heatmap = None
+                next_heatmap_detach = None
+
+            next_corner_pred = old_model.cornerEvaluator(next_mask, next_img_volume, binmap=binmap_detach, heatmap=next_heatmap_detach)
+            next_edge_pred = old_model.edgeEvaluator(next_edge_mask, next_mask, next_img_volume, next_corner_pred.detach(),
                                     torch.zeros(edge_mask.shape[0], edge_bin_size, device=old_model.device),
                                     binmap=binmap_detach, heatmap=next_heatmap_detach).detach().cpu()
+
         
         next_edge_pred = next_edge_pred.to(model.device)
 
-        corner_l = cornerloss(corner_pred, corner_gt_mask)
-        edge_l = edgeloss(edge_pred, (1-gamma) * gt_edge.unsqueeze(1) + gamma * next_edge_pred)
+        # discounted corner loss
+        corner_l = cornerloss(corner_pred, corner_gt_mask + gamma * next_corner_pred.detach())  # (bs, 1, 256, 256)  after sigmoid 
+
+        # discounted edge loss 
+        edge_l = edgeloss(edge_pred, gt_edge.unsqueeze(1) + gamma * next_edge_pred.detach())
+        
         loss_dict['corner'] = corner_l
         loss_dict['edge'] = edge_l
+        
+        '''
         if use_cross_loss:
             pseudo_corner_map = heatmap.detach()[:,1:]
             pseudo_edge_map = heatmap.detach()[:,0:1]
@@ -172,7 +181,7 @@ def train(dataloader, old_model, model, edge_bin_size):
             #corner_input_mask = (mask[:, 1:]+1)/2
             #corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
             #loss_dict['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo)
-
+        '''
         loss = 0
         for key in loss_dict.keys():
             if key == 'corner':
@@ -181,10 +190,10 @@ def train(dataloader, old_model, model, edge_bin_size):
                 loss += loss_dict[key]
             elif key == 'heatmap':
                 loss += loss_dict[key] * 5
-            elif key == 'edge_cross':
-                loss += loss_dict[key] * 0.1
-            elif key == 'corner_cross':
-                loss += loss_dict[key]
+            #elif key == 'edge_cross':
+                #loss += loss_dict[key] * 0.1
+            #elif key == 'corner_cross':
+                #loss += loss_dict[key]
 
         if idx % 50 == 0:
             print('[Batch {}/{}]'.format(idx, len(dataloader)), end=' ')
@@ -556,9 +565,9 @@ evaluator_train.to('cuda:0')
 evaluator_train.train()
 
 optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
-cornerloss = nn.L1Loss()
+cornerloss = nn.SmoothL1Loss(beta=0.5)
 heatmaploss = nn.MSELoss()
-edgeloss = nn.MSELoss()
+edgeloss = nn.SmoothL1Loss(beta=0.5)
 edgeloss2 = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor([1., 3.], device=evaluator_train.device))
 
 
