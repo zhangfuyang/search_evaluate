@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import random
 import copy
 import cv2
@@ -21,58 +20,65 @@ import pdb
 
 print(config)
 
+global lock 
+lock = 1
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+device_search = torch.device("cuda:0")
+device_train = torch.device("cuda:0")
+
 
 class trainThread(threading.Thread):
-    def __init__(self, lock, evaluator, search_evaluator, prev_evaluator, new_data_memory, dataloader, dataset, testdataset):
+    def __init__(self, thread_lock, policy_net, target_net, new_data_memory, dataloader, dataset, testdataset):
         super(trainThread, self).__init__()
-        self.lock = lock
-        self.evaluator = evaluator
-        self.search_evaluator = search_evaluator
+        self.policy_net = policy_net
+        self.target_net = target_net
         self.new_data_memory = new_data_memory
         self.dataloader = dataloader
         self.dataset = dataset
         self.testdataset = testdataset
-        self.prev_evaluator = prev_evaluator
+        self.thread_lock = thread_lock
 
     def run(self):
+        global lock
         print('{}[training thread]{} wait for initial data'.format(Fore.BLUE, Style.RESET_ALL))
         prefix = 0
         testbest = 0
-        test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
+        train_sample = 0
+        #test_f1 = test(self.testdataset, self.policy_net, edge_bin_size)
         while True:
             # pre-load data
-            while len(self.dataset) < 1500:
-                time.sleep(30)
+            while len(self.dataset) < 20:#1500:
+                while(lock%3!=0):
+                    time.sleep(1)
                 while len(self.new_data_memory) != 0:
                     data = self.new_data_memory.pop()
                     self.dataset.add_processed_data(data)
-                continue
 
-            print('{}[training thread]{} start training'.format(
-                    Fore.BLUE, Style.RESET_ALL))
-            train_sample = 0
-            for _ in range(3):
-                print('{}[training thread]{} New start {}! training with {} samples'.format(
-                    Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
-                self.lock.acquire()
-                self.prev_evaluator.load_state_dict(self.search_evaluator.state_dict())
-                self.lock.release()
-                train(self.dataloader, self.prev_evaluator, self.evaluator, edge_bin_size, optimizer, loss_func)
+            while (lock%3!=0):
+                time.sleep(1)
+
+            while len(self.new_data_memory) != 0:
+                data = self.new_data_memory.pop()
+                self.dataset.add_processed_data(data)
+
+            print('{}[training thread]{} New start {}! training with {} samples'.format(
+                Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
                 
-                while len(self.new_data_memory) != 0:
-                    data = self.new_data_memory.pop()
-                    self.dataset.add_processed_data(data)
+            train(self.dataloader, self.target_net, self.policy_net, edge_bin_size, optimizer, loss_func, self.dataset)
+            
+            lock += 1
+    
+            # update search evaluator
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+   
+            train_sample += len(self.dataset)
+            if train_sample >= MAX_DATA_STORAGE/2:
+                break
 
-                # update search evaluator
-                self.lock.acquire()
-                self.search_evaluator.load_state_dict(self.evaluator.state_dict())
-                self.lock.release()
-
-                train_sample += len(self.dataset)
-                if train_sample >= MAX_DATA_STORAGE/2:
-                    break
-
-            test_f1 = test(self.testdataset, self.evaluator, edge_bin_size)
+            '''
+            test_f1 = test(self.testdataset, self.policy_net, edge_bin_size)
             print('{}[training thread]{} update searching evaluator'.format(Fore.BLUE, Style.RESET_ALL))
             print('{}[training thread]{} store weight with prefix={}'.format(Fore.BLUE, Style.RESET_ALL, prefix))
             if os.path.exists(os.path.join(save_path, '{}_{}.pt'.format(prefix-14, 'backbone'))):
@@ -90,46 +96,44 @@ class trainThread(threading.Thread):
                 with open(os.path.join(save_path, 'best.txt'), 'w') as f:
                     f.write('{} {}'.format(testbest, prefix))
             prefix += 1
+            '''
 
 
 class searchThread(threading.Thread):
-    def __init__(self, thread_id, lock, evaluator, new_data_memory, trainDataset, searchDataset):
+    def __init__(self, policy_net, dataloader, new_data_memory, trainDataset, searchDataset):
         super(searchThread, self).__init__()
-        self.lock = lock
-        self.thread_id = thread_id
-        self.evaluator = evaluator
+        self.policy_net = policy_net
+        self.dataloader = dataloader
         self.new_data_memory = new_data_memory
         self.train_dataset = trainDataset
         self.search_dataset = searchDataset
 
     def run(self):
-        print('{}[searching thread {}]{} start'.format(Fore.RED, self.thread_id, Style.RESET_ALL))
+        global lock
+        print('{}[searching thread]{} start'.format(Fore.RED, Style.RESET_ALL))
         search_count = 0
         add_count = 0
         #buffer = []
 
         while True:
-            order = list(range(len(self.search_dataset)))
-            random.shuffle(order)
-            for idx in order:
-                data = self.search_dataset.database[idx]
-                name = data['name']
-                conv_data = data['conv_data']
+            for idx, data in enumerate(self.dataloader):
+                while(lock % 3 == 0): 
+                    time.sleep(1)
+
+                name = data['name'][0]
+                graph_data = self.search_dataset.getDataByName(name)
+                conv_data = graph_data['conv_data']
                 corners = conv_data['corners']
                 corners = np.round(corners).astype(np.int)
                 edges = conv_data['edges']
 
-                gt_data = data['gt_data']
-                gt_corners = gt_data['corners']
-                gt_corners = np.round(gt_corners).astype(np.int)
-                gt_edges = gt_data['edges']
+                #gt_data = graph_data['gt_data']
+                #gt_corners = gt_data['corners']
+                #gt_corners = np.round(gt_corners).astype(np.int)
+                #gt_edges = gt_data['edges']
 
                 #try:
                 initial_candidate = Candidate.initial(Graph(corners, edges), name)
-                #self.lock.acquire()
-                #self.evaluator.get_score(initial_candidate)
-                #self.lock.release()
-
                 prev_candidates = [initial_candidate]
 
                 for epoch_i in range(beam_depth):
@@ -138,13 +142,16 @@ class searchThread(threading.Thread):
                         prev_ = prev_candidates[prev_i]
                         if len(prev_.graph.getCorners()) == 0 or len(prev_.graph.getEdges()) == 0:
                             continue
-                        next_candidates = candidate_enumerate_training(prev_, gt_data)
+                        next_candidates = candidate_enumerate_training(prev_)
+                        
+                        #self.lock.acquire()
+                        self.policy_net.get_score_list(next_candidates, all_edge=True)  # policy network
+                        #self.lock.release()
 
-                        self.evaluator.get_score_list(next_candidates, all_edge=True)
                         next_candidates = sorted(next_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
-                        # pick the best as S_{t+1}
-                        next_ = next_candidates[0]
-
+                        # pick the best Q(s,a)
+                        next_ = next_candidates[0]  
+                        
                         prev_corners = prev_.graph.getCornersArray()
                         prev_edges = prev_.graph.getEdgesArray()
                         next_corners = next_.graph.getCornersArray()
@@ -175,13 +182,13 @@ class searchThread(threading.Thread):
                 #    print('{}[seaching thread] An error happened during searching, not sure yet, '
                 #          'skip!{}'.format(Fore.RED, Style.RESET_ALL))
                 #    continue
-
+                lock += 1
                 search_count += 1
-                if (idx+1) % 5 == 0:
-                    print('{}[searching thread {}]{} Already search {} graphs and add {} '
-                          'graphs into database'.format(Fore.RED, self.thread_id, Style.RESET_ALL, search_count, add_count))
-                    print('{}[searching thread {}]{} {} remain in the swap'
-                          ' memory'.format(Fore.RED, self.thread_id, Style.RESET_ALL, len(self.new_data_memory)))
+                if (idx+1) % 1 == 0:
+                    print('{}[seaching thread]{} Already search {} graphs and add {} '
+                          'graphs into database'.format(Fore.RED, Style.RESET_ALL, search_count, add_count))
+                    print('{}[seaching thread]{} {} remain in the swap'
+                          ' memory'.format(Fore.RED, Style.RESET_ALL, len(self.new_data_memory)))
 
 
 def save_candidate_image(candidate, base_path, base_name):
@@ -306,36 +313,32 @@ train_loader = torch.utils.data.DataLoader(train_dataset,
                                           num_workers=4,
                                           drop_last=False)
 
-# evaluator_train is used for training
-# evaluator_search is used for searching
-# separate into two modules in order to use multiple threads to accelerate
-evaluator_train = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
+search_loader = torch.utils.data.DataLoader(search_dataset,
+                                          batch_size=1,
+                                          shuffle=True,
+                                          num_workers=0,
+                                          drop_last=False)
+
+
+policy_net = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
-evaluator_search = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
+policy_net.to(device_train)
+policy_net.train()
+
+target_net = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
-evaluator_search.load_state_dict(evaluator_train.state_dict())
-evaluator_search.to('cuda:1')
-evaluator_search.eval()
-
-prev_evaluator = scoreEvaluator_with_train(os.path.join(base_path, 'cities_dataset'),
-                                             backbone_channel=64, edge_bin_size=edge_bin_size,
-                                             corner_bin=False)
-prev_evaluator.load_state_dict(evaluator_search.state_dict())
-prev_evaluator.to('cuda:1')
-prev_evaluator.eval()
+target_net.load_state_dict(policy_net.state_dict())
+target_net.to(device_search)
+target_net.eval()
 
 
-evaluator_train.to('cuda:0')
-evaluator_train.train()
-
-optimizer = torch.optim.Adam(evaluator_train.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
 cornerloss = nn.SmoothL1Loss()
 heatmaploss = nn.MSELoss()
 edgeloss = nn.SmoothL1Loss()
 edge_psudo_loss = nn.SmoothL1Loss()
-#edge_psudo_loss = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor([1., 3.], device=evaluator_train.device))
 loss_func = {'cornerloss': cornerloss, 'heatmaploss': heatmaploss,
             'edgeloss': edgeloss, 'edge_psudo_loss': edge_psudo_loss}
 
@@ -346,12 +349,12 @@ f.write(dicttoxml(config))
 f.close()
 print('save config.xml done.')
 ######## start training and searching threads #####
-lock = threading.Lock()
+thread_lock = threading.Lock()
 data_memory = []
 
-st1 = searchThread(1, lock, evaluator_search, data_memory, train_dataset, search_dataset)
+st1 = searchThread(policy_net, search_loader, data_memory, train_dataset, search_dataset)
 
-tt = trainThread(lock, evaluator_train, evaluator_search, prev_evaluator, data_memory, train_loader, train_dataset, test_dataset)
+tt = trainThread(thread_lock, policy_net, target_net, data_memory, train_loader, train_dataset, test_dataset)
 
 # activate_search_thread:
 st1.start()
