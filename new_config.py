@@ -17,7 +17,7 @@ base_path = '/local-scratch/fuyang'  # '/local-scratch/project/datasets/cities_d
 mode = 'strong' # use edge strong constraint (need direction and degree both correct), otherwise, only based on the location. Default is 'strong'
 edge_strong_constraint = True if mode == 'strong' else False
 data_folder = base_path + '/cities_dataset'
-save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_heatmap_orthogonal/'.format(mode)
+save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_rl/'.format(mode)
 #pretrained_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_{}_constraint/'.format(mode)
 
 use_heat_map = True  # predict heatmap as well, Default True

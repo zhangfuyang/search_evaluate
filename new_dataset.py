@@ -124,15 +124,15 @@ class trainSearchDataset(Dataset):
                     break
             if find is False:
                 has_remove = True
-        if has_remove and corners.shape[0] == next_corners.shape[0]:
-            print('------old-------')
-            print(corners)
-            print(edges)
-            print('pick id', id_)
-            print('-----next-------')
-            print(next_corners)
-            print(next_edges)
-            print('result', has_remove)
+        #if has_remove and corners.shape[0] == next_corners.shape[0]:
+        #    print('------old-------')
+        #    print(corners)
+        #    print(edges)
+        #    print('pick id', id_)
+        #    print('-----next-------')
+        #    print(next_corners)
+        #    print(next_edges)
+        #    print('result', has_remove)
 
         if has_remove:
             next_edge_mask = np.zeros_like(edge_mask)

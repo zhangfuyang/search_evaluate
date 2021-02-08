@@ -93,31 +93,33 @@ class trainThread(threading.Thread):
 
 
 class searchThread(threading.Thread):
-    def __init__(self, lock, evaluator, dataloader, new_data_memory, trainDataset, searchDataset):
+    def __init__(self, thread_id, lock, evaluator, new_data_memory, trainDataset, searchDataset):
         super(searchThread, self).__init__()
         self.lock = lock
+        self.thread_id = thread_id
         self.evaluator = evaluator
-        self.dataloader = dataloader
         self.new_data_memory = new_data_memory
         self.train_dataset = trainDataset
         self.search_dataset = searchDataset
 
     def run(self):
-        print('{}[searching thread]{} start'.format(Fore.RED, Style.RESET_ALL))
+        print('{}[searching thread {}]{} start'.format(Fore.RED, self.thread_id, Style.RESET_ALL))
         search_count = 0
         add_count = 0
         #buffer = []
 
         while True:
-            for idx, data in enumerate(self.dataloader):
-                name = data['name'][0]
-                graph_data = self.search_dataset.getDataByName(name)
-                conv_data = graph_data['conv_data']
+            order = list(range(len(self.search_dataset)))
+            random.shuffle(order)
+            for idx in order:
+                data = self.search_dataset.database[idx]
+                name = data['name']
+                conv_data = data['conv_data']
                 corners = conv_data['corners']
                 corners = np.round(corners).astype(np.int)
                 edges = conv_data['edges']
 
-                gt_data = graph_data['gt_data']
+                gt_data = data['gt_data']
                 gt_corners = gt_data['corners']
                 gt_corners = np.round(gt_corners).astype(np.int)
                 gt_edges = gt_data['edges']
@@ -176,10 +178,10 @@ class searchThread(threading.Thread):
 
                 search_count += 1
                 if (idx+1) % 5 == 0:
-                    print('{}[seaching thread]{} Already search {} graphs and add {} '
-                          'graphs into database'.format(Fore.RED, Style.RESET_ALL, search_count, add_count))
-                    print('{}[seaching thread]{} {} remain in the swap'
-                          ' memory'.format(Fore.RED, Style.RESET_ALL, len(self.new_data_memory)))
+                    print('{}[searching thread {}]{} Already search {} graphs and add {} '
+                          'graphs into database'.format(Fore.RED, self.thread_id, Style.RESET_ALL, search_count, add_count))
+                    print('{}[searching thread {}]{} {} remain in the swap'
+                          ' memory'.format(Fore.RED, self.thread_id, Style.RESET_ALL, len(self.new_data_memory)))
 
 
 def save_candidate_image(candidate, base_path, base_name):
@@ -304,12 +306,6 @@ train_loader = torch.utils.data.DataLoader(train_dataset,
                                           num_workers=4,
                                           drop_last=False)
 
-search_loader = torch.utils.data.DataLoader(search_dataset,
-                                          batch_size=1,
-                                          shuffle=True,
-                                          num_workers=0,
-                                          drop_last=False)
-
 # evaluator_train is used for training
 # evaluator_search is used for searching
 # separate into two modules in order to use multiple threads to accelerate
@@ -353,7 +349,7 @@ print('save config.xml done.')
 lock = threading.Lock()
 data_memory = []
 
-st1 = searchThread(lock, evaluator_search, search_loader, data_memory, train_dataset, search_dataset)
+st1 = searchThread(1, lock, evaluator_search, data_memory, train_dataset, search_dataset)
 
 tt = trainThread(lock, evaluator_train, evaluator_search, prev_evaluator, data_memory, train_loader, train_dataset, test_dataset)
 
