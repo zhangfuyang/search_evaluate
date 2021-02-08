@@ -1154,7 +1154,7 @@ class _thread(threading.Thread):
         self.lock.release()
         print(self.name, "spend time: {}s".format(time.time()-start_time))
 
-def candidate_enumerate_training(candidate, gt):
+def candidate_enumerate_training(candidate):
     new_candidates = []
     # remove a corner
     try:
@@ -1202,7 +1202,7 @@ def candidate_enumerate_training(candidate, gt):
             new_candidates.append(random.choice(new_))
     except:
         print('something wrong with add a corner from parallel !!!!!!!!!!!!!!!!!!!!!!!!')
-
+    '''
     # add an edge from gt
     try:
         new_ = adding_an_edge_from_gt(candidate, gt)
@@ -1210,7 +1210,7 @@ def candidate_enumerate_training(candidate, gt):
             new_candidates.append(random.choice(new_))
     except:
         print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-
+    '''
     # add a orthogonal edge
     try:
         new_ = adding_a_orthogonal_edge(candidate)
