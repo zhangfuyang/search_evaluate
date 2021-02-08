@@ -8,6 +8,24 @@
 - lock is changed to a global counter
 - remove adding ground-truth edge action from candidate_enumerate_training() in new_utils.py
 
+### Changes (Zhang):
+
+- fix a bug in new_dataset.py, where finding the same edge in next_edges part
+
+- replace random search policy as beam search in searchThread, with 20% percent to random explore
+
+- put test() and train() into a new file new_train_test_func.py
+
+- add TD version of crossloss in train()
+
+- add some comment in new_config.py
+
+> new_config.py:
+>> use_heatmap=False. -> no heatmap prediction as well as crossloss
+>
+>> use_heatmap=True, use_cross_loss=False. -> activate heatmap prediction, but no crossloss
+> 
+>> use_heatmap=True, use_cross_loss=True. -> activate heatmap prediction as well as crossloss
 ## [Feb 6]
 
 ### Changes (Xu):
@@ -31,26 +49,4 @@
 - split two files new_search_with_train.py (1 search thread), new_search_with_train_multi_thread.py (2 search threads)
 
 
-## [Feb 7]
-
-### Changes (Xu):
-
-### Changes (Zhang):
-
-- fix a bug in new_dataset.py, where finding the same edge in next_edges part
-
-- replace random search policy as beam search in searchThread, with 20% percent to random explore
-
-- put test() and train() into a new file new_train_test_func.py
-
-- add TD version of crossloss in train()
-
-- add some comment in new_config.py
-
-> new_config.py:
->> use_heatmap=False. -> no heatmap prediction as well as crossloss
->
->> use_heatmap=True, use_cross_loss=False. -> activate heatmap prediction, but no crossloss
-> 
->> use_heatmap=True, use_cross_loss=True. -> activate heatmap prediction as well as crossloss
 
