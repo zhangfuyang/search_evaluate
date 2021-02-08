@@ -1,5 +1,13 @@
 # search_evaluate
 
+## [Feb 7]
+
+### Changes (Xu):
+
+- modified new_search_with_train.py to using policy_net and target_net
+- lock is changed to a global counter
+- remove adding ground-truth edge action from candidate_enumerate_training() in new_utils.py
+
 ## [Feb 6]
 
 ### Changes (Xu):
