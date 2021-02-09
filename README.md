@@ -9,6 +9,8 @@
 
 > change optimizer from RMSprop to Adam with gradient clipping (1.0)
 
+> Improve training stability
+
 ## [Feb 8]
 
 ### Changes (Xu):
