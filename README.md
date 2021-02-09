@@ -3,7 +3,12 @@
 ## [Feb 8]
 
 ### Changes (Xu):
-#### New
+#### Modification to old code
+> new_config.py
+>> define new variables
+
+
+#### New code
 > agent.py
 >> Transition
 >
