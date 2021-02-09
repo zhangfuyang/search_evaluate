@@ -5,7 +5,12 @@
 ### Changes (Xu):
 > agent.py:
 >> Transition
+>
 >> ReplayMemory
+>
+>> Agent
+>
+>>> selection_action()
 
 
 ## [Feb 7]
