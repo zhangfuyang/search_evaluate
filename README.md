@@ -50,6 +50,10 @@ python train_dqn.py
 >
 >> main training loop
 
+> train_dqn_float16.py
+>> mix-precision version of train_dqn.py
+
+
 
 ## [Feb 7]
 
