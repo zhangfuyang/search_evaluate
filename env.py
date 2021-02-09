@@ -23,7 +23,6 @@ class BuildingEnv():
         self.env_dataset = env_dataset
         self.ground_truth = ground_truth
 
-
     def reset(self, name):
         graph_data = self.env_dataset.getDataByName(name)
         conv_data = graph_data['conv_data']
@@ -32,7 +31,6 @@ class BuildingEnv():
         edges = conv_data['edges']
         state = State(name, corners, edges)
         return state 
-
 
     def compute_rewards(self, state, corner_false_id, edge_false_id):
         edges = state.edges
@@ -55,7 +53,6 @@ class BuildingEnv():
         # direct learn segmentation from image, not include in the searching system
         # TODO: could add here as well
         return corner_gt, edge_gt
-
     
     def compute_false_id(self, state):
         corners = state.corners
@@ -83,7 +80,6 @@ class BuildingEnv():
         corner_false_id = list(corner_false_id)
 
         return corner_false_id, edge_false_id
-
 
     def step(self, state):
         corner_false_id, edge_false_id = self.compute_false_id(state)
