@@ -38,10 +38,10 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
+            nn.BatchNorm2d(mid_channels, track_running_stats=False),
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels, track_running_stats=False),
             nn.LeakyReLU(inplace=True)
         )
 
@@ -53,7 +53,7 @@ class Down(nn.Module):
         super(Down, self).__init__()
         self.down_conv = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, stride=2),
-            nn.BatchNorm2d(in_channels),
+            nn.BatchNorm2d(in_channels, track_running_stats=False),
             nn.LeakyReLU(inplace=True),
             DoubleConv(in_channels, out_channels)
         )
@@ -275,7 +275,7 @@ class scoreEvaluator_with_train(nn.Module):
         self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
         self.img_cache = imgCache(datapath)
         self.corner_bin = corner_bin
-        self.region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
+        self.region_cache = regionCache(os.path.join(data_folder,'result/corner_edge_region/entire_region_mask'))
         self.device = 'cpu'
         if self.corner_bin:
             self.corner_bin_Net = UNet_big(3, bin_size)
@@ -310,7 +310,6 @@ class scoreEvaluator_with_train(nn.Module):
             volume = torch.cat((volume, binmap), 1)
         if use_heat_map:
             volume = torch.cat((volume, heatmap), 1)
-
         out = self.edgeNet(edge_mask, mask, volume, corner_map, edge_bin)
         return out
 
@@ -359,6 +358,7 @@ class scoreEvaluator_with_train(nn.Module):
                 heatmap = self.getheatmap(img)
         for candidate_ in candidate_list:
             self.get_score(candidate_, all_edge=all_edge, img_volume=img_volume, heatmap=heatmap)
+
 
     def get_score(self, candidate, all_edge=False, img_volume=None, heatmap=None):
         graph = candidate.graph
@@ -412,6 +412,7 @@ class scoreEvaluator_with_train(nn.Module):
             edge_input_mask = np.concatenate(inputs, 0)
             edge_input_mask = torch.cuda.FloatTensor(edge_input_mask, device=self.device)
             expand_shape = edge_input_mask.shape[0]
+            
             with torch.no_grad():
                 if self.corner_bin:
                     bin_map_extend = bin_map.expand(expand_shape,-1,-1,-1)
@@ -421,7 +422,6 @@ class scoreEvaluator_with_train(nn.Module):
                     heatmap_extend = heatmap.expand(expand_shape,-1,-1,-1)
                 else:
                     heatmap_extend = None
-
                 edge_batch_pred = self.edgeEvaluator(
                     edge_input_mask,
                     mask.expand(expand_shape,-1,-1,-1),
@@ -433,7 +433,7 @@ class scoreEvaluator_with_train(nn.Module):
                 )
             edge_batch_pred = edge_batch_pred.cpu().detach()
             edge_batch_score = edge_batch_pred#.exp()[:,0]#/edge_batch_pred.exp().sum(1)
-
+            
             edge_batch_score = edge_batch_score.numpy()
             for edge_i, update_i in enumerate(batch):
                 edge_ele = edge_update_list[update_i]
