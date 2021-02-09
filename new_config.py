@@ -1,7 +1,7 @@
 mean = [0.485, 0.456, 0.406]
 std = [0.229, 0.224, 0.225]
 MAX_DATA_STORAGE = 60000
-MEMORY_SIZE = 10000
+MEMORY_SIZE = 5000
 max_run = 5
 sample_edges = 5
 activate_search_thread = True
