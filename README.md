@@ -3,6 +3,9 @@
 ## [Feb 8]
 
 ### Changes (Xu):
+```train model
+python train_dqn.py
+```
 #### Modification to old code
 > new_config.py
 >> define new variables
