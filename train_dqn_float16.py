@@ -105,7 +105,7 @@ def optimize_model():
     # Backprop and update weights 
     optimizer.zero_grad()
     scaler.scale(total_loss).backward()
-    nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)   # clip gradient
+    nn.utils.clip_grad_norm_(policy_net.parameters(), 0.5)   # clip gradient
     scaler.step(optimizer)
     scaler.update()
     
@@ -117,6 +117,8 @@ def optimize_model():
 #################
 epsilon = config['epsilon']
 total_episodes = 0
+train_episodes = 0
+
 for i_episode in range(config['num_episodes']):
     for data in env_dataloader:
         print('##############')
@@ -124,9 +126,12 @@ for i_episode in range(config['num_episodes']):
         name = data['name'][0]  # get img name 
         state = env.reset(name)  # reset env from this img
 
+        do_train = len(memory) > config['MEMORY_SIZE']/2
+        if do_train:
+            train_episodes += 1
         # Run episode 
         for t in count(): 
-            do_train = len(memory) > config['MEMORY_SIZE']/2
+            
             # Select action and perform an action (policy network)
             next_state = agent.select_action(state, epsilon, use_target_net=False)  # epsilon-greedy policy + stepping
             if next_state.corners.shape[0] <= 1:
@@ -152,7 +157,7 @@ for i_episode in range(config['num_episodes']):
             
    
         # Update the target network, copying all weights and biases in DQN
-        if total_episodes % config['TARGET_UPDATE'] == 0 and do_train:
+        if train_episodes % config['TARGET_UPDATE'] == 0 and do_train:
             target_net.load_state_dict(policy_net.state_dict())
         
         total_episodes += 1
