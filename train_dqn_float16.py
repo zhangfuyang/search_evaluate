@@ -117,7 +117,7 @@ for i_episode in range(config['num_episodes']):
         name = data['name'][0]  # get img name 
         state = env.reset(name)  # reset env from this img
 
-        do_train = True #len(memory) > config['MEMORY_SIZE']/2
+        do_train = len(memory) > config['MEMORY_SIZE']/2
         if do_train:
             train_episodes += 1
 
