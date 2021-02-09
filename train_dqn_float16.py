@@ -126,6 +126,7 @@ for i_episode in range(config['num_episodes']):
 
         # Run episode 
         for t in count(): 
+            do_train = len(memory) > config['MEMORY_SIZE']/2
             # Select action and perform an action (policy network)
             next_state = agent.select_action(state, epsilon, use_target_net=False)  # epsilon-greedy policy + stepping
             if next_state.corners.shape[0] <= 1:
@@ -138,9 +139,10 @@ for i_episode in range(config['num_episodes']):
             memory.push(next_state, rewards) 
 
             # Perform one step of the optimization (on the target network)
-            loss = optimize_model()
-            if loss is not None:
-                print('loss at step %d: %.3f' % (t, loss))
+            if do_train:
+                loss = optimize_model()
+                if loss is not None:
+                    print('loss at step %d: %.3f' % (t, loss))
             
             # Move to the next state 
             if done or t >= config['max_run']:
@@ -150,7 +152,7 @@ for i_episode in range(config['num_episodes']):
             
    
         # Update the target network, copying all weights and biases in DQN
-        if total_episodes % config['TARGET_UPDATE'] == 0:
+        if total_episodes % config['TARGET_UPDATE'] == 0 and do_train:
             target_net.load_state_dict(policy_net.state_dict())
         
         total_episodes += 1
