@@ -75,7 +75,6 @@ def optimize_model():
     # Random sample a mini-batch
     transitions = memory.sample(config['batch_size'])
 
-
     total_loss = 0
     with torch.cuda.amp.autocast():
         for tt in transitions:
@@ -84,8 +83,14 @@ def optimize_model():
             # current q-function (corner & edge scores)
             state_action_value = agent.value_func(state, config['sample_edges'], use_policy_net=True)
 
+            if len(state_action_value['edge_idx']) <= 0:
+                return None
+
             # select action based on max_q (target network)
             next_state_max_q = agent.max_q_action(state, use_target_net=True)
+
+            if next_state_max_q.corners.shape[0] <= 1:
+                return None
 
             # next maximum target q-function (same corner & edge scores)
             next_state_value = agent.value_func(next_state_max_q, config['sample_edges'], use_policy_net=True, 
