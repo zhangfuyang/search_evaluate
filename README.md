@@ -3,7 +3,6 @@
 ## [Feb 9]
 
 ### Changes (Xu):
-#### Usage
 #### Modification to old code
 > agent.py
 >> set estimated edge value function to 0.5 for removed edge (0.5 means we are unsure since the edge is removed in the next state)
