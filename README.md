@@ -4,16 +4,16 @@
 
 ### Changes (Xu):
 #### Usage
-To train model:
+Train model:
 ```
 python train_dqn.py
 ```
 
-You can also train the model with float16:
+Train model with float16:
 ```
 python train_dqn_float16.py
 ```
-The mix-precision version will be much faster 
+The half precision version will be much faster 
 
 #### Modification to old code
 > new_config.py
