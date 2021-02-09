@@ -1,5 +1,13 @@
 # search_evaluate
 
+## [Feb 8]
+
+### Changes (Xu):
+> agent.py:
+>> Transition
+>> ReplayMemory
+
+
 ## [Feb 7]
 
 ### Changes (Xu):
