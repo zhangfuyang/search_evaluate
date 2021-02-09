@@ -10,7 +10,13 @@
 >
 >> Agent
 >
->>> selection_action()
+>>> selection_action() -> epsilon-greedy policy (with exploration) 
+>
+>>> max_q_action()
+>
+>>> value_func()
+>
+>>> compute_loss()
 
 
 ## [Feb 7]
