@@ -7,6 +7,13 @@ To train model:
 ```
 python train_dqn.py
 ```
+
+You can also train the model with float16:
+```
+python train_dqn_float16.py
+```
+The mix-precision version will be much faster 
+
 #### Modification to old code
 > new_config.py
 >> define new variables
