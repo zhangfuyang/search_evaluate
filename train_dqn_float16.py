@@ -1,14 +1,8 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import time
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.transforms as T
 import os
-import random
 import copy
-import cv2
 import torch
 from new_config import config
 from new_scoreAgent import scoreEvaluator_with_train as DQN
@@ -21,28 +15,27 @@ import pdb
 
 print(config)
 
-# Initialize cuda environment 
+# Set cuda environment 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-policy_net_device = torch.device("cuda:0")
-target_net_device = torch.device("cuda:0")
+policyNet_device = torch.device("cuda:0")
+targetNet_device = torch.device("cuda:0")
 
-# Initialize policy network
-policy_net = DQN(os.path.join(config['base_path'], 'cities_dataset'),
-                                            backbone_channel=64, edge_bin_size=config['edge_bin_size'],
-                                            corner_bin=False)
-policy_net.to(policy_net_device)
-policy_net.train()
+# Initialize network
+policyNet = DQN(os.path.join(config['base_path'], 'cities_dataset'),
+                backbone_channel=64, edge_bin_size=config['edge_bin_size'],
+                corner_bin=False)
+policyNet.to(policyNet_device)
+policyNet.train()
 
-# Initialize target network
-target_net = DQN(os.path.join(config['base_path'], 'cities_dataset'),
-                                            backbone_channel=64, edge_bin_size=config['edge_bin_size'],
-                                            corner_bin=False)
-target_net.load_state_dict(policy_net.state_dict())
-target_net.to(target_net_device)
-target_net.eval()
+targetNet = DQN(os.path.join(config['base_path'], 'cities_dataset'),
+                backbone_channel=64, edge_bin_size=config['edge_bin_size'],
+                corner_bin=False)
+targetNet.load_state_dict(policyNet.state_dict())
+targetNet.to(targetNet_device)
+targetNet.eval()
 
 # Initialize optimizer
-optimizer = optim.RMSprop(policy_net.parameters())
+optimizer = optim.Adam(policyNet.parameters(), lr=1e-4)##optim.RMSprop(policy_net.parameters())
 
 # Initialize replay memory
 memory = ReplayMemory(config['MEMORY_SIZE'])
@@ -57,16 +50,14 @@ env_dataloader = torch.utils.data.DataLoader(env_dataset,
 ground_truth_dataset = trainSearchDataset(config['data_folder'], data_scale=config['data_scale'],
                                    edge_strong_constraint=config['edge_strong_constraint'], corner_bin=False)
 
-# Initialize environment 
+# Initialize agent and environment
+agent = Agent(policyNet, targetNet, ground_truth_dataset) 
 env = BuildingEnv(env_dataset, ground_truth_dataset)
-
-# Initialize agent
-agent = Agent(policy_net, target_net, ground_truth_dataset)
 
 scaler = torch.cuda.amp.GradScaler()
 
 #########################
-# optimize for one step #
+# Optimize for one step #
 #########################
 def optimize_model():
     # Return if not enough data in memory 
@@ -80,7 +71,8 @@ def optimize_model():
         for tt in transitions:
             state = tt.next_state
             reward = tt.reward
-            # current q-function (corner & edge scores)
+
+            # current q-function (policy network)
             state_action_value = agent.value_func(state, config['sample_edges'], use_policy_net=True)
 
             if len(state_action_value['edge_idx']) <= 0:
@@ -92,8 +84,8 @@ def optimize_model():
             if next_state_max_q.corners.shape[0] <= 1:
                 return None
 
-            # next maximum target q-function (same corner & edge scores)
-            next_state_value = agent.value_func(next_state_max_q, config['sample_edges'], use_policy_net=True, 
+            # next maximum target q-function (target network)
+            next_state_value = agent.value_func(next_state_max_q, config['sample_edges'], use_policy_net=False, 
                                             prev_state=state, prev_edge_idx=state_action_value['edge_idx'])
         
             # Compute the DQN loss 
@@ -105,39 +97,38 @@ def optimize_model():
     # Backprop and update weights 
     optimizer.zero_grad()
     scaler.scale(total_loss).backward()
-    nn.utils.clip_grad_norm_(policy_net.parameters(), 0.5)   # clip gradient
+    nn.utils.clip_grad_norm_(policyNet.parameters(), 1.0)   # clip gradient
     scaler.step(optimizer)
     scaler.update()
     
     return total_loss.item() 
     
 
-#################
-# training loop #
-#################
+######################
+# Main training loop #
+######################
 epsilon = config['epsilon']
 total_episodes = 0
 train_episodes = 0
 
 for i_episode in range(config['num_episodes']):
     for data in env_dataloader:
-        print('##############')
-        print('episode: ',total_episodes)
+        print('episode: [%d/%d]' % (total_episodes, len(env_dataloader)*config['num_episodes']))
         name = data['name'][0]  # get img name 
         state = env.reset(name)  # reset env from this img
 
-        do_train = len(memory) > config['MEMORY_SIZE']/2
+        do_train = True #len(memory) > config['MEMORY_SIZE']/2
         if do_train:
             train_episodes += 1
-        # Run episode 
+
+        # Run one episode 
         for t in count(): 
-            
             # Select action and perform an action (policy network)
-            next_state = agent.select_action(state, epsilon, use_target_net=False)  # epsilon-greedy policy + stepping
+            next_state = agent.select_action(state, epsilon, use_target_net=False)  # epsilon-greedy policy + transition
             if next_state.corners.shape[0] <= 1:
                 break
-            
-            # Get rewards
+
+            # Get rewards from environment (next_state = current state + action)
             rewards, done = env.step(next_state)  
             
             # Store transition in memory
@@ -158,7 +149,8 @@ for i_episode in range(config['num_episodes']):
    
         # Update the target network, copying all weights and biases in DQN
         if train_episodes % config['TARGET_UPDATE'] == 0 and do_train:
-            target_net.load_state_dict(policy_net.state_dict())
+            print('update target network...')
+            targetNet.load_state_dict(policyNet.state_dict())
         
         total_episodes += 1
         
