@@ -1202,15 +1202,13 @@ def candidate_enumerate_training(candidate):
             new_candidates.append(random.choice(new_))
     except:
         print('something wrong with add a corner from parallel !!!!!!!!!!!!!!!!!!!!!!!!')
-    '''
-    # add an edge from gt
+    
+    # null action 
     try:
-        new_ = adding_an_edge_from_gt(candidate, gt)
-        if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+        new_candidates.append(candidate)
     except:
-        print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    '''
+        print('something wrong with not doing anything !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    
     # add a orthogonal edge
     try:
         new_ = adding_a_orthogonal_edge(candidate)
