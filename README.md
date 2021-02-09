@@ -33,6 +33,12 @@
 >>> step(): wrapper function of computer_rewards(), actual stepping happened in agent.value_func()
 
 
+> train_dqn.py
+>> optimize_model(): optimize one step of DQN
+>
+>> main training loop
+
+
 ## [Feb 7]
 
 ### Changes (Xu):
