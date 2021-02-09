@@ -14,6 +14,7 @@ from new_config import config
 import skimage
 import skimage.transform
 import matplotlib.pyplot as plt
+import torch.nn as nn
 
 import pdb
 
@@ -111,11 +112,12 @@ class Agent():
         if config['use_heat_map']:
             with torch.no_grad():
                 heatmap = model.getheatmap(img)
-                heatmap_detach = heatmap.detach()
+                heatmap_detach = heatmap
         else:
             heatmap = None
             heatmap_detach = None
 
+        
         # Full mask
         mask = render(state.corners, state.edges, render_pad=-1, scale=config['data_scale'])
         mask = torch.FloatTensor(mask).unsqueeze(0).to(model.device)
@@ -198,6 +200,8 @@ class Agent():
         else:
             out_data['edge_idx'] = None
         out_data['prev_edge_shared_idx'] = prev_edge_shared_idx
+        out_data['heatmap'] = heatmap
+        out_data['name'] = state.name
         return out_data
 
 
@@ -219,5 +223,15 @@ class Agent():
 
         expected_corner_values = (next_corner_value * config['gamma']) + corner_rewards * (1-config['gamma'])
         corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
+
+        # Heatmap loss 
+        heatmap = state_value['heatmap']
+        gt_data = self.ground_truth.ground_truth[state_value['name']]
+        gt_corners = gt_data['corners']
+        gt_edges = gt_data['edges']
+        gt_heat_map = render(gt_corners, gt_edges, render_pad=0, corner_size=5, edge_linewidth=3)
+        gt_heat_map = torch.FloatTensor(gt_heat_map).to(heatmap.device).detach()
+        heatmaploss = nn.MSELoss()
+        heatmap_l = heatmaploss(heatmap, gt_heat_map)
         
-        return edge_loss + corner_loss
+        return edge_loss + corner_loss*10.0 + heatmap_l*5.0
