@@ -61,16 +61,15 @@ class Agent():
         self.target_net = target_net
         self.ground_truth = ground_truth
 
-
     def select_action(self, state, epsilon, use_target_net=True):
         if use_target_net:
             model = self.target_net
         else:
             model = self.policy_net
         # rank value function from a set of heurastic actions 
-        initial_candidate = Candidate.initial(Graph(state.corners, state.edges), state.name)
         with torch.no_grad():
-            next_candidates = candidate_enumerate_training(initial_candidate) 
+            initial_candidate = Candidate.initial(Graph(state.corners, state.edges), state.name)
+            next_candidates = candidate_enumerate_training(initial_candidate, 1)
             next_candidates = reduce_duplicate_candidate(next_candidates)
             model.get_score_list(next_candidates, all_edge=True)
             next_candidates = sorted(next_candidates, key=lambda x:x.graph.graph_score(), reverse=True) # descending scores
@@ -84,14 +83,11 @@ class Agent():
         next_corners = next_candidate.graph.getCornersArray()
         next_edges = next_candidate.graph.getEdgesArray()
         next_state = State(state.name, next_corners, next_edges)
-
         return next_state 
-
 
     def max_q_action(self, state, use_target_net=True):
         next_state = self.select_action(state, epsilon=-1, use_target_net=use_target_net)
         return next_state
-
 
     def value_func(self, state, num_edges, use_policy_net=True, prev_state=None, prev_edge_idx=None):
         if use_policy_net:
@@ -204,15 +200,29 @@ class Agent():
         out_data['name'] = state.name
         return out_data
 
-
     def compute_loss(self, state_value, next_state_value, reward):
-        # Edge loss 
-        edge_index = next_state_value['prev_edge_shared_idx']
-        prev_edges_value = state_value['edge_batch_pred'][edge_index]
+        # Find removed and shared Edge
+        assert state_value['edge_batch_pred'].shape[0] == len(state_value['edge_idx'])
+        assert len(state_value['edge_idx']) >= len(next_state_value['prev_edge_shared_idx']) 
+        removed_edges = set(np.arange(len(state_value['edge_idx']))) - set(next_state_value['prev_edge_shared_idx'])
+        if len(removed_edges) == 0:
+            removed_edges = []
+        else:
+            removed_edges = list(removed_edges)
+        shared_edges = next_state_value['prev_edge_shared_idx']
+        assert len(state_value['edge_idx']) == len(shared_edges) + len(removed_edges) 
+        
+        prev_edges_value = state_value['edge_batch_pred']
         next_edges_value = next_state_value['edge_batch_pred']
-        edge_rewards = torch.FloatTensor(reward['edge_gt'][edge_index]).to(next_edges_value.device).unsqueeze(1)
-
-        expected_edge_values = (next_edges_value * config['gamma']) + edge_rewards * (1-config['gamma'])
+        next_edges_value_ = torch.zeros_like(prev_edges_value).to(next_edges_value.device)
+        next_edges_value_[shared_edges] = next_edges_value
+        next_edges_value_[removed_edges] = 0.5  # Special case: removed edge
+        edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(next_edges_value.device).unsqueeze(1)
+        
+        # reward + discounted return 
+        expected_edge_values = (next_edges_value_ * config['gamma']) + edge_rewards * (1-config['gamma'])
+      
+        # Edge loss 
         edge_loss = F.smooth_l1_loss(prev_edges_value, expected_edge_values.detach())
         
         # Corner loss
@@ -225,7 +235,7 @@ class Agent():
         corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
 
         # Heatmap loss 
-        heatmap = state_value['heatmap']
+        heatmap = state_value['heatmap'][0]
         gt_data = self.ground_truth.ground_truth[state_value['name']]
         gt_corners = gt_data['corners']
         gt_edges = gt_data['edges']
