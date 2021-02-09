@@ -3,6 +3,7 @@
 ## [Feb 8]
 
 ### Changes (Xu):
+#### Usage
 To train model:
 ```
 python train_dqn.py
