@@ -3,7 +3,8 @@
 ## [Feb 8]
 
 ### Changes (Xu):
-```train model
+To train model:
+```
 python train_dqn.py
 ```
 #### Modification to old code
