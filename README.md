@@ -3,20 +3,34 @@
 ## [Feb 8]
 
 ### Changes (Xu):
-> agent.py:
+> agent.py
 >> Transition
 >
 >> ReplayMemory
 >
 >> Agent
 >
->>> selection_action() -> epsilon-greedy policy (with exploration) 
+>>> selection_action(): epsilon-greedy policy (with exploration) 
 >
->>> max_q_action()
+>>> max_q_action(): max Q(s,a), Q is the target network
 >
->>> value_func()
+>>> value_func(): compute CornerScore(s,a), EdgeScore(s,a), step to next step s x a -> s'
 >
->>> compute_loss()
+>>> compute_loss(): DQN loss (Huber loss)
+
+
+> env.py
+>> State
+>
+>> BuildingEnv
+>
+>>> reset(): choose a new image and start from conv-mpn results
+> 
+>>> compute_rewards(): compute R(s,a)
+>
+>>> compute_false_id(): helper function of computer_rewards()
+>
+>>> step(): wrapper function of computer_rewards(), actual stepping happened in agent.value_func()
 
 
 ## [Feb 7]
