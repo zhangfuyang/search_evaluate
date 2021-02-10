@@ -200,39 +200,51 @@ class Agent():
         out_data['name'] = state.name
         return out_data
 
-    def compute_loss(self, state_value, next_state_value, reward):
-        # Find removed and shared Edge
-        assert state_value['edge_batch_pred'].shape[0] == len(state_value['edge_idx'])
-        assert len(state_value['edge_idx']) >= len(next_state_value['prev_edge_shared_idx']) 
-        removed_edges = set(np.arange(len(state_value['edge_idx']))) - set(next_state_value['prev_edge_shared_idx'])
-        if len(removed_edges) == 0:
-            removed_edges = []
-        else:
-            removed_edges = list(removed_edges)
-        shared_edges = next_state_value['prev_edge_shared_idx']
-        assert len(state_value['edge_idx']) == len(shared_edges) + len(removed_edges) 
+    def compute_loss(self, state_value, reward, next_state_value=None):
+        if next_state_value is not None:
+            # Find removed and shared Edge
+            assert state_value['edge_batch_pred'].shape[0] == len(state_value['edge_idx'])
+            assert len(state_value['edge_idx']) >= len(next_state_value['prev_edge_shared_idx']) 
+            removed_edges = set(np.arange(len(state_value['edge_idx']))) - set(next_state_value['prev_edge_shared_idx'])
+            if len(removed_edges) == 0:
+                removed_edges = []
+            else:
+                removed_edges = list(removed_edges)
+            shared_edges = next_state_value['prev_edge_shared_idx']
+            assert len(state_value['edge_idx']) == len(shared_edges) + len(removed_edges) 
         
-        prev_edges_value = state_value['edge_batch_pred']
-        next_edges_value = next_state_value['edge_batch_pred']
-        next_edges_value_ = torch.zeros_like(prev_edges_value).to(next_edges_value.device)
-        next_edges_value_[shared_edges] = next_edges_value
-        next_edges_value_[removed_edges] = 0.5  # Special case: removed edge
-        edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(next_edges_value.device).unsqueeze(1)
+            prev_edges_value = state_value['edge_batch_pred']
+            next_edges_value = next_state_value['edge_batch_pred']
+            next_edges_value_ = torch.zeros_like(prev_edges_value).to(next_edges_value.device)
+            next_edges_value_[shared_edges] = next_edges_value
+            next_edges_value_[removed_edges] = 0.5  # Special case: removed edge
+            edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(next_edges_value.device).unsqueeze(1)
         
-        # reward + discounted return 
-        expected_edge_values = (next_edges_value_ * config['gamma']) + edge_rewards * (1-config['gamma'])
+            # reward + discounted return 
+            expected_edge_values = (next_edges_value_ * config['gamma']) + edge_rewards * (1-config['gamma'])
       
-        # Edge loss 
-        edge_loss = F.smooth_l1_loss(prev_edges_value, expected_edge_values.detach())
+            # Edge loss 
+            edge_loss = F.smooth_l1_loss(prev_edges_value, expected_edge_values.detach())
         
-        # Corner loss
-        prev_corner_value = state_value['corner_pred']
-        corner_rewards = torch.FloatTensor(reward['corner_gt']).to(prev_corner_value.device).reshape(1,1,256,256)
-        gt_mask = (corner_rewards>0).detach()
-        next_corner_value = next_state_value['corner_pred'] * gt_mask.reshape(1,1,256,256)
+            # Corner loss
+            prev_corner_value = state_value['corner_pred']
+            corner_rewards = torch.FloatTensor(reward['corner_gt']).to(prev_corner_value.device).reshape(1,1,256,256)
+            gt_mask = (corner_rewards>0).detach()
+            next_corner_value = next_state_value['corner_pred'] * gt_mask.reshape(1,1,256,256)
+            expected_corner_values = (next_corner_value * config['gamma']) + corner_rewards * (1-config['gamma'])
+            corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
 
-        expected_corner_values = (next_corner_value * config['gamma']) + corner_rewards * (1-config['gamma'])
-        corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
+        # No value function 
+        else:
+            # Edge loss 
+            prev_edges_value = state_value['edge_batch_pred']
+            edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(prev_edges_value.device).unsqueeze(1)
+            edge_loss = F.smooth_l1_loss(prev_edges_value, edge_rewards.detach())
+
+            # Corner loss
+            prev_corner_value = state_value['corner_pred']
+            corner_rewards = torch.FloatTensor(reward['corner_gt']).to(prev_corner_value.device).reshape(1,1,256,256)
+            corner_loss = F.smooth_l1_loss(prev_corner_value, corner_rewards.detach())
 
         # Heatmap loss 
         heatmap = state_value['heatmap'][0]
