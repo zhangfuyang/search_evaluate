@@ -10,10 +10,17 @@ from agent import ReplayMemory, Agent
 from new_dataset import myDataset, trainSearchDataset 
 from env import BuildingEnv
 from itertools import count
+from dicttoxml import dicttoxml
 
 import pdb
 
+# Save config file 
 print(config)
+os.makedirs(config['save_path'], exist_ok=True)
+f = open(os.path.join(config['save_path'], 'config.xml'), 'wb')
+f.write(dicttoxml(config))
+f.close()
+print('save config.xml done.')
 
 # Set cuda environment 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -56,6 +63,7 @@ env = BuildingEnv(env_dataset, ground_truth_dataset)
 
 scaler = torch.cuda.amp.GradScaler()
 
+
 #########################
 # Optimize for one step #
 #########################
@@ -84,12 +92,14 @@ def optimize_model():
             if next_state_max_q.corners.shape[0] <= 1:
                 return None
 
-            # next maximum target q-function (target network)
-            next_state_value = agent.value_func(next_state_max_q, config['sample_edges'], use_policy_net=False, 
+            if config['gamma'] != 0:
+                # next maximum target q-function (target network)
+                next_state_value = agent.value_func(next_state_max_q, config['sample_edges'], use_policy_net=False, 
                                             prev_state=state, prev_edge_idx=state_action_value['edge_idx'])
-        
+            else:
+                next_state_value = None
             # Compute the DQN loss 
-            loss = agent.compute_loss(state_action_value, next_state_value, reward)
+            loss = agent.compute_loss(state_action_value, reward, next_state_value)
             total_loss += loss
 
         total_loss /= config['batch_size']
@@ -117,7 +127,7 @@ for i_episode in range(config['num_episodes']):
         name = data['name'][0]  # get img name 
         state = env.reset(name)  # reset env from this img
 
-        do_train = len(memory) > config['MEMORY_SIZE']/2
+        do_train = len(memory) > config['MEMORY_SIZE']/5
         if do_train:
             train_episodes += 1
 
@@ -153,5 +163,8 @@ for i_episode in range(config['num_episodes']):
             targetNet.load_state_dict(policyNet.state_dict())
         
         total_episodes += 1
+
+    print('saving weights')
+    policyNet.store_weight(config['save_path'], str(train_episodes))
         
 
