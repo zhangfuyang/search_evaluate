@@ -1154,13 +1154,16 @@ class _thread(threading.Thread):
         self.lock.release()
         print(self.name, "spend time: {}s".format(time.time()-start_time))
 
-def candidate_enumerate_training(candidate):
+
+def candidate_enumerate_training(candidate, N):
+    assert N >= 1 
     new_candidates = []
+    
     # remove a corner
     try:
         new_ = removing_a_corner_operation(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with remove a corner !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
@@ -1168,7 +1171,7 @@ def candidate_enumerate_training(candidate):
     try:
         new_ = removing_a_colinear_corner_operation(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with remove a colinear corner !!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
@@ -1176,7 +1179,7 @@ def candidate_enumerate_training(candidate):
     try:
         new_ = removing_an_edge_operation(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with remove an edge !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
@@ -1184,7 +1187,7 @@ def candidate_enumerate_training(candidate):
     try:
         new_ = adding_an_edge_operation(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with add an edge from existed corner !!!!!!!!!!!!!!!!!!!!')
 
@@ -1192,14 +1195,14 @@ def candidate_enumerate_training(candidate):
     try:
         new_ = adding_a_corner_from_two_edges_extension(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with add a corner from two edges !!!!!!!!!!!!!!!!!!!!!!!!')
 
     try:
         new_ = adding_a_corner_from_parallel(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with add a corner from parallel !!!!!!!!!!!!!!!!!!!!!!!!')
     
@@ -1213,7 +1216,7 @@ def candidate_enumerate_training(candidate):
     try:
         new_ = adding_a_orthogonal_edge(candidate)
         if len(new_) > 0:
-            new_candidates.append(random.choice(new_))
+            new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with add a orthogonal edge !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     return new_candidates
