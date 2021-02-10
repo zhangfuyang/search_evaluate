@@ -167,7 +167,7 @@ class Agent():
 
         edge_masks = np.array(edge_masks)
         edge_masks = torch.FloatTensor(edge_masks).unsqueeze(1).to(model.device)
-        assert(edge_mask.shape[0] > 0)
+        assert(edge_masks.shape[0] > 0)
         
         # corner score
         corner_pred = model.cornerEvaluator(mask, img_volume, binmap=binmap_detach, heatmap=heatmap_detach)
@@ -215,10 +215,10 @@ class Agent():
         
             prev_edges_value = state_value['edge_batch_pred']
             next_edges_value = next_state_value['edge_batch_pred']
-            next_edges_value_ = torch.zeros_like(prev_edges_value).to(next_edges_value.device)
-            next_edges_value_[shared_edges] = next_edges_value
+            next_edges_value_ = torch.zeros_like(prev_edges_value).to(prev_edges_value.device)
+            next_edges_value_[shared_edges] = next_edges_value.detach().cpu().to(prev_edges_value.device)
             next_edges_value_[removed_edges] = 0.5  # Special case: removed edge
-            edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(next_edges_value.device).unsqueeze(1)
+            edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(prev_edges_value.device).unsqueeze(1)
         
             # reward + discounted return 
             expected_edge_values = (next_edges_value_ * config['gamma']) + edge_rewards * (1-config['gamma'])
@@ -230,7 +230,7 @@ class Agent():
             prev_corner_value = state_value['corner_pred']
             corner_rewards = torch.FloatTensor(reward['corner_gt']).to(prev_corner_value.device).reshape(1,1,256,256)
             gt_mask = (corner_rewards>0).detach()
-            next_corner_value = next_state_value['corner_pred'] * gt_mask.reshape(1,1,256,256)
+            next_corner_value = next_state_value['corner_pred'].detach().cpu().to(prev_corner_value.device) * gt_mask.reshape(1,1,256,256)
             expected_corner_values = (next_corner_value * config['gamma']) + corner_rewards * (1-config['gamma'])
             corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
 
