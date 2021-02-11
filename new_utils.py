@@ -1155,9 +1155,22 @@ class _thread(threading.Thread):
         print(self.name, "spend time: {}s".format(time.time()-start_time))
 
 
-def candidate_enumerate_training(candidate, N):
+def candidate_enumerate_training(candidate, N, gt):
     assert N >= 1 
     new_candidates = []
+    # null action 
+    try:
+        new_candidates.append(candidate)
+    except:
+        print('something wrong with not doing anything !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    
+    # add an edge from gt
+    try:
+        new_ = adding_an_edge_from_gt(candidate, gt)
+        if len(new_) > 0:
+            new_candidates += random.sample(new_, min(N, len(new_)))
+    except:
+        print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     
     # remove a corner
     try:
@@ -1206,11 +1219,6 @@ def candidate_enumerate_training(candidate, N):
     except:
         print('something wrong with add a corner from parallel !!!!!!!!!!!!!!!!!!!!!!!!')
     
-    # null action 
-    try:
-        new_candidates.append(candidate)
-    except:
-        print('something wrong with not doing anything !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     
     # add a orthogonal edge
     try:
@@ -1219,6 +1227,7 @@ def candidate_enumerate_training(candidate, N):
             new_candidates += random.sample(new_, min(N, len(new_)))
     except:
         print('something wrong with add a orthogonal edge !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    
     return new_candidates
 
 
