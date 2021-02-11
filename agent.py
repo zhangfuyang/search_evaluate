@@ -106,9 +106,8 @@ class Agent():
         binmap = None
         binmap_detach = None
         if config['use_heat_map']:
-            with torch.no_grad():
-                heatmap = model.getheatmap(img)
-                heatmap_detach = heatmap
+            heatmap = model.getheatmap(img)
+            heatmap_detach = heatmap
         else:
             heatmap = None
             heatmap_detach = None
@@ -197,6 +196,7 @@ class Agent():
             out_data['edge_idx'] = None
         out_data['prev_edge_shared_idx'] = prev_edge_shared_idx
         out_data['heatmap'] = heatmap
+        out_data['edge_masks'] = edge_masks
         out_data['name'] = state.name
         return out_data
 
@@ -224,7 +224,8 @@ class Agent():
             expected_edge_values = (next_edges_value_ * config['gamma']) + edge_rewards * (1-config['gamma'])
       
             # Edge loss 
-            edge_loss = F.smooth_l1_loss(prev_edges_value, expected_edge_values.detach())
+            edge_l = F.smooth_l1_loss(prev_edges_value, expected_edge_values.detach())
+            total_loss['edge'] = edge_l.item()
         
             # Corner loss
             prev_corner_value = state_value['corner_pred']
@@ -232,19 +233,22 @@ class Agent():
             gt_mask = (corner_rewards>0).detach()
             next_corner_value = next_state_value['corner_pred'].detach().cpu().to(prev_corner_value.device) * gt_mask.reshape(1,1,256,256)
             expected_corner_values = (next_corner_value * config['gamma']) + corner_rewards * (1-config['gamma'])
-            corner_loss = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
+            corner_l = F.smooth_l1_loss(prev_corner_value, expected_corner_values.detach())
+            total_loss['corner'] = corner_l.item()
 
         # No value function 
         else:
             # Edge loss 
             prev_edges_value = state_value['edge_batch_pred']
             edge_rewards = torch.FloatTensor(reward['edge_gt'][state_value['edge_idx']]).to(prev_edges_value.device).unsqueeze(1)
-            edge_loss = F.smooth_l1_loss(prev_edges_value, edge_rewards.detach())
+            edge_l = F.smooth_l1_loss(prev_edges_value, edge_rewards.detach())
+            total_loss['edge'] = edge_l.item()
 
             # Corner loss
             prev_corner_value = state_value['corner_pred']
             corner_rewards = torch.FloatTensor(reward['corner_gt']).to(prev_corner_value.device).reshape(1,1,256,256)
-            corner_loss = F.smooth_l1_loss(prev_corner_value, corner_rewards.detach())
+            corner_l = F.smooth_l1_loss(prev_corner_value, corner_rewards.detach())
+            total_loss['corner'] = corner_l.item()
 
         # Heatmap loss 
         heatmap = state_value['heatmap'][0]
@@ -255,5 +259,24 @@ class Agent():
         gt_heat_map = torch.FloatTensor(gt_heat_map).to(heatmap.device).detach()
         heatmaploss = nn.MSELoss()
         heatmap_l = heatmaploss(heatmap, gt_heat_map)
+        total_loss['heatmap'] = heatmap_l.item()
+
+        if config['use_cross_loss']:
+            pseudo_corner_map = heatmap.unsqueeze(0).detach()[:,1:]  # (1,1,256,256)
+            pseudo_edge_map = heatmap.unsqueeze(0).detach()[:,0:1]
+
+            # edge pseudo
+            edge_mask = state_value['edge_masks']
+            numerator = torch.mul((edge_mask+1)/2, pseudo_edge_map).sum(1).sum(1).sum(1)
+            denominator = ((edge_mask+1)/2).sum(1).sum(1).sum(1)
+            edge_gt_pseudo = numerator / denominator
+            coord = state_value['coords'] # (1,2,2)
+            index = torch.arange(coord.shape[0]).unsqueeze(1).expand(-1,2)  # (1,2)
+            pseudo_corner_score = pseudo_corner_map[index, 0, coord[index[:,0],:,0], coord[index[:,1],:,1]]
+            pseudo_corner_score = pseudo_corner_score > 0.8
+            pseudo_corner_score = pseudo_corner_score[:,0] & pseudo_corner_score[:,1] # two corners must all be classified as True
+            edge_gt_pseudo = ((edge_gt_pseudo > 0.8) & pseudo_corner_score).long()
+            edge_ce_l = edgeloss(prev_edges_value, edge_gt_pseudo)
+            total_loss['edge_ce'] = edge_ce_l.item()
         
-        return edge_loss + corner_loss*10.0 + heatmap_l*5.0
+        return edge_l + corner_l*10.0 + heatmap_l*5.0 + edge_ce_l*0.1, total_loss
