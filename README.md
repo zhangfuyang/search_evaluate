@@ -1,5 +1,17 @@
 # search_evaluate
 
+## [Feb 10]
+
+### Changes (Xu):
+#### New code
+> train_dqn_parallel.py
+>> multi-thread version of train_dqn.py 
+
+#### Modification to old code
+> fix critical bugs 
+
+> setting gamma=0 leads to similar result as before 
+
 ## [Feb 9]
 
 ### Changes (Xu):
