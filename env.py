@@ -39,13 +39,13 @@ class BuildingEnv():
         ### corner reward ###
         ### reward of 1 for correct corner ###
         corner_correct_id = list(set(range(corners.shape[0])) - set(corner_false_id))
-        corner_gt = render(corners[corner_correct_id], np.array([]), render_pad=0, scale=config['data_scale'])[1]
+        corner_gt = render(corners[corner_false_id], np.array([]), render_pad=0, scale=config['data_scale'])[1]
         
         ###  edge reward  ###
         ### reward of 1 for correct edge ###
         edge_gt = []
         for id_ in range(edges.shape[0]):
-            edge_label = [0 if id_ in edge_false_id else 1]
+            edge_label = [1 if id_ in edge_false_id else 0]
             edge_gt.append(edge_label[0])
         edge_gt = np.array(edge_gt)
             
@@ -95,7 +95,6 @@ class BuildingEnv():
         
         return rewards, done
    
-
 
 
 
