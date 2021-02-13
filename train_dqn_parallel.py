@@ -53,7 +53,8 @@ targetNet.eval()
 
 
 # Initialize optimizer
-optimizer = optim.Adam(policyNet.parameters(), lr=1e-4)##optim.RMSprop(policy_net.parameters())
+optimizer = optim.Adam(policyNet.parameters(), lr=5e-4)##optim.RMSprop(policy_net.parameters())
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=config['step_size'], gamma=0.5)
 
 # Initialize replay memory
 memory = ReplayMemory(config['MEMORY_SIZE'])
@@ -75,7 +76,7 @@ env = BuildingEnv(env_dataset, ground_truth_dataset)
 print(len(env_dataset))
 
 class trainThread(threading.Thread):
-    def __init__(self, lock, memory, agent, policyNet, targetNet, optimizer):
+    def __init__(self, lock, memory, agent, policyNet, targetNet, optimizer, scheduler):
         super(trainThread, self).__init__()
         self.lock = lock
         self.memory = memory
@@ -83,6 +84,7 @@ class trainThread(threading.Thread):
         self.policyNet = policyNet
         self.targetNet = targetNet
         self.optimizer = optimizer
+        self.scheduler = scheduler
  
     def run(self):
         print('{}[train thread]{} start'.format(Fore.BLUE, Style.RESET_ALL))
@@ -90,37 +92,50 @@ class trainThread(threading.Thread):
         train_episodes = 0
         while True:
             # Return if not enough data in memory 
-            if len(self.memory) < config['batch_size'] or len(self.memory) < config['MEMORY_SIZE']/5:
-                time.sleep(5)
+            if len(self.memory) < config['batch_size'] or len(self.memory) < 1000:
+                time.sleep(1)
                 continue 
 
             # Random sample a mini-batch
             transitions = self.memory.sample(config['batch_size'])
-            
+
+            # Compute DQN loss  
             total_loss = 0
             for tt in transitions:
                 state = tt.next_state
                 reward = tt.reward
 
-                # current q-function (policy network)
+                # Current q-function (policy network)
                 state_action_value = self.agent.value_func(state, config['sample_edges'], self.policyNet)
-                if len(state_action_value['edge_idx']) <= 0:
+                if state_action_value is None:
+                    continue
+                if len(state_action_value['edge_idx']) <= 1:
                     continue
 
-                # select action based on max_q (target network)
-                next_state_max_q = self.agent.max_q_action(state, self.targetNet)
-                if next_state_max_q.corners.shape[0] <= 1:
-                    continue
-
+                # gamma > 0
                 if config['gamma'] != 0:
-                    # next maximum target q-function (target network)
-                    next_state_value = self.agent.value_func(next_state_max_q, config['sample_edges'], self.targetNet, 
+                    with torch.no_grad():
+                        # Select action based on max_q (target network)
+                        next_state_max_q = self.agent.max_q_action(state, self.targetNet)
+                        if next_state_max_q.corners.shape[0] <= 1 or next_state_max_q.edges.shape[0] <= 1:
+                            continue
+
+                        # Next maximum target q-function (target network)
+                        next_state_value = self.agent.value_func(next_state_max_q, config['sample_edges'], self.targetNet, 
                                             prev_state=state, prev_edge_idx=state_action_value['edge_idx'])
+                        if next_state_value is None:
+                            continue
+
+                        #print(next_state_value['prev_edge_shared_idx'])  # which index outof focus edge is good  [0,1]
+                        #print(state_action_value['edge_idx'])   # current state focus edge index                 [6, 8, 10]
+                # gamma = 0
                 else:
+                    pdb.set_trace()
                     next_state_value = None
-                # Compute the DQN loss 
-                loss, print_loss = agent.compute_loss(state_action_value, reward, next_state_value)
+                
+                loss, print_loss = agent.compute_loss(state_action_value, reward, next_state_value)                
                 total_loss += loss
+
             total_loss /= config['batch_size']
 
             # Backprop and update weights 
@@ -128,22 +143,27 @@ class trainThread(threading.Thread):
             total_loss.backward()
             nn.utils.clip_grad_norm_(self.policyNet.parameters(), 1.0)   # clip gradient
             self.optimizer.step()
-
-            if (train_episodes+1) % 10 == 0:
-                print('{}[train thread]{} episode: [{}] heatmap: {} corner: {} edge: {} edge-xe: {}'.format(Fore.BLUE, Style.RESET_ALL, 
+            
+            if (train_episodes+1) % 1 == 0:
+                for param_group in self.optimizer.param_groups:
+                    lr = param_group['lr']
+                    break
+                print('{}[train thread]{} episode: [{}] heatmap: {} corner: {} edge: {} edge-ce: {} edge_pseudo_ce {} lr {}'.format(Fore.BLUE, Style.RESET_ALL, 
                     str(train_episodes+1), round(print_loss['heatmap'],5), round(print_loss['corner'],5), 
-                    round(print_loss['edge'],5), round(print_loss['edge_ce'],5) ))
-            train_episodes += 1
-
+                    round(print_loss['edge'],5), round(print_loss['edge_ce'],5), round(print_loss['edge_pseudo_ce'],5) ,lr ))
+    
             if (train_episodes+1) % config['TARGET_UPDATE'] == 0:
                 print('{}[train thread]{} update target network'.format(Fore.BLUE, Style.RESET_ALL))
-                #self.lock.acquire()
                 self.targetNet.load_state_dict(self.policyNet.state_dict())
-                #self.lock.release()
 
             if (train_episodes+1) % config['SAVE_FREQ'] == 0:
                 print('{}[train thread]{} save policy network'.format(Fore.BLUE, Style.RESET_ALL))
                 self.policyNet.store_weight(config['save_path'], str(train_episodes+1))
+
+            train_episodes += 1
+            self.scheduler.step()
+
+            
     
    
 
@@ -160,55 +180,32 @@ class searchThread(threading.Thread):
 
     def run(self):
         print('{}[search thread]{} start'.format(Fore.RED, Style.RESET_ALL))
-        epsilon = config['epsilon']
 
-        total_episodes = 0
         # Keep sampling new data and insert it to memory
+        total_episodes = 0
         while True:
             for data in env_dataloader:
-                print('{}[search thread]{} episode: [{}] memory size: {}'.format(Fore.RED, Style.RESET_ALL, 
-                      total_episodes, len(self.memory)))
-                name = data['name'][0]  # get img name 
+                start_time = time.time()
+                name = data['name'][0]  
 
-                # choose between conv-mpn or gt initial state
-                graph_data = env_dataset.getDataByName(name)
-                gt_data = graph_data['gt_data']
-                gt_corners = gt_data['corners']
-                gt_edges = gt_data['edges']
-                if random.random() > 0.8:
-                    state = State(name, gt_corners, gt_edges)
-                else:
-                    state = self.env.reset(name)  # reset env from this img
+                # get initial state from conv-mpn
+                state = self.env.reset(name)  
 
-                # Run one episode 
-                for t in count(): 
-                    # Select action and perform an action (policy network)
-                    next_state = self.agent.select_action(state, epsilon, self.sampleNet)  # epsilon-greedy policy + transition
-                    if next_state.corners.shape[0] <= 1:
-                        break
+                # Select action, compute reward, and save to memory 
+                self.agent.select_actions(state, self.sampleNet, self.env, self.memory, config['epsilon'])  # epsilon-greedy policy + beamsearch
+                total_episodes += 1
 
-                    # Get rewards from environment (next_state = current state + action)
-                    rewards, done = self.env.step(next_state)  
-            
-                    # Store transition in memory
-                    self.memory.push(next_state, rewards) 
+                print('{}[search thread]{} memory size: {} process time: {}'.format(Fore.RED, Style.RESET_ALL, 
+                      len(self.memory), (time.time() - start_time)))
 
-                    # Move to the next state 
-                    if done or t >= config['max_run']:
-                        break  # done or spend too much time
-                    else:
-                        state = copy.deepcopy(next_state)
-            
-                # Update the target network, copying all weights and biases in DQN
                 if (total_episodes+1) % config['SAMPLE_UPDATE'] == 0:
                     print('{}[search thread]{} update sample network'.format(Fore.RED, Style.RESET_ALL))
                     self.sampleNet.load_state_dict(self.policyNet.state_dict())
-        
-                total_episodes += 1
+
 
 
 lock = threading.Lock()
 st = searchThread(lock, memory, env_dataloader, env, agent, sampleNet, policyNet)
-tt = trainThread(lock, memory, agent, policyNet, targetNet, optimizer)
+tt = trainThread(lock, memory, agent, policyNet, targetNet, optimizer, scheduler)
 st.start()
-tt.start()
+#tt.start()
