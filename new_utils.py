@@ -1155,7 +1155,7 @@ class _thread(threading.Thread):
         print(self.name, "spend time: {}s".format(time.time()-start_time))
 
 
-def candidate_enumerate_training(candidate, N, gt):
+def candidate_enumerate_training(candidate, N, gt=None):
     assert N >= 1 
     new_candidates = []
     # null action 
@@ -1165,12 +1165,13 @@ def candidate_enumerate_training(candidate, N, gt):
         print('something wrong with not doing anything !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     
     # add an edge from gt
-    try:
-        new_ = adding_an_edge_from_gt(candidate, gt)
-        if len(new_) > 0:
-            new_candidates += random.sample(new_, min(N, len(new_)))
-    except:
-        print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    if gt is not None:
+        try:
+            new_ = adding_an_edge_from_gt(candidate, gt)
+            if len(new_) > 0:
+                new_candidates += random.sample(new_, min(N, len(new_)))
+        except:
+            print('something wrong with add an edge from gt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     
     # remove a corner
     try:
