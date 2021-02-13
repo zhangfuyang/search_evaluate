@@ -25,11 +25,11 @@ class BuildingEnv():
 
     def reset(self, name):
         graph_data = self.env_dataset.getDataByName(name)
-        conv_data = graph_data['conv_data']
-        corners = conv_data['corners']
-        corners = np.round(corners).astype(np.int)
-        edges = conv_data['edges']
-        state = State(name, corners, edges)
+        convmpn_data = graph_data['conv_data']
+        convmpn_corners = convmpn_data['corners']
+        convmpn_corners = np.round(convmpn_corners).astype(np.int)
+        convmpn_edges = convmpn_data['edges']
+        state = State(name, convmpn_corners, convmpn_edges)  # conv-mpn
         return state 
 
     def compute_rewards(self, state, corner_false_id, edge_false_id):
@@ -37,21 +37,18 @@ class BuildingEnv():
         corners = state.corners
         
         ### corner reward ###
-        ### reward of 1 for correct corner ###
-        corner_correct_id = list(set(range(corners.shape[0])) - set(corner_false_id))
+        ### 1 for incorrect corner, 0 for correct corner ###
+        #corner_correct_id = list(set(range(corners.shape[0])) - set(corner_false_id))
         corner_gt = render(corners[corner_false_id], np.array([]), render_pad=0, scale=config['data_scale'])[1]
         
         ###  edge reward  ###
-        ### reward of 1 for correct edge ###
+        #edge_correct_id = list(set(range(edges.shape[0])) - set(edge_false_id))
+        ### 1 for incorrect edge, 0 for correct edge ###
         edge_gt = []
         for id_ in range(edges.shape[0]):
             edge_label = [1 if id_ in edge_false_id else 0]
             edge_gt.append(edge_label[0])
         edge_gt = np.array(edge_gt)
-            
-        ### region ###
-        # direct learn segmentation from image, not include in the searching system
-        # TODO: could add here as well
         return corner_gt, edge_gt
     
     def compute_false_id(self, state):
