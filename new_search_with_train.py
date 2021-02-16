@@ -543,7 +543,7 @@ data_memory = []
 st = searchThread(lock, evaluator_search, search_loader, data_memory, train_dataset, search_dataset)
 tt = trainThread(lock, evaluator_train, evaluator_search, data_memory, train_loader, train_dataset, test_loader)
 
-#st.start()
+st.start()
 tt.start()
 
 
