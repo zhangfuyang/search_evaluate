@@ -38,10 +38,12 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
+            #nn.BatchNorm2d(mid_channels),
+            nn.InstanceNorm2d(mid_channels),
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            #nn.BatchNorm2d(out_channels),
+            nn.InstanceNorm2d(out_channels),
             nn.LeakyReLU(inplace=True)
         )
 
@@ -53,7 +55,8 @@ class Down(nn.Module):
         super(Down, self).__init__()
         self.down_conv = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, stride=2),
-            nn.BatchNorm2d(in_channels),
+            #nn.BatchNorm2d(in_channels),
+            nn.InstanceNorm2d(in_channels),
             nn.LeakyReLU(inplace=True),
             DoubleConv(in_channels, out_channels)
         )
@@ -273,7 +276,7 @@ class scoreEvaluator_with_train(nn.Module):
         self.edgeNet = edge_net(backbone_channel=channel_size, edge_bin_size=edge_bin_size)
         self.img_cache = imgCache(datapath)
         self.corner_bin = corner_bin
-        self.region_cache = regionCache('/local-scratch/fuyang/result/corner_edge_region/entire_region_mask')
+        self.region_cache = regionCache(os.path.join(data_folder, 'result/corner_edge_region/entire_region_mask'))
         self.device = 'cpu'
         if self.corner_bin:
             self.corner_bin_Net = UNet_big(3, bin_size)
