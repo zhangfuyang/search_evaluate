@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import random
 import cv2
 import torch
@@ -15,6 +15,7 @@ from new_utils import visualization, candidate_enumerate_training, reduce_duplic
 from colorama import Fore, Style
 from dicttoxml import dicttoxml
 from new_config import *
+import torch.nn.functional as F
 
 print(config)
 
@@ -38,21 +39,40 @@ def test(dataloader, model, edge_bin_size):
             if use_heat_map:
                 heatmap = model.getheatmap(img)
                 gt_heat_map = data['gt_heat_map'].to(model.device)
-                heatmap_l = heatmaploss(heatmap, gt_heat_map)
+                heatmapMask_gt = torch.where(gt_heat_map>0.5)
+                heatmapMask_pred = torch.where(heatmap>0.5)
+                heatmap_l = 0
+                if heatmapMask_gt[0].shape[0] > 0:
+                    heatmap_l += 0.3*heatmaploss(heatmap[heatmapMask_gt], gt_heat_map[heatmapMask_gt])
+                if heatmapMask_pred[0].shape[0] > 0:
+                    heatmap_l += 0.3*heatmaploss(heatmap[heatmapMask_pred], gt_heat_map[heatmapMask_pred])
+                heatmap_l += 0.3*heatmaploss(heatmap, gt_heat_map)
+
                 if 'heatmap' not in total_loss.keys():
                     total_loss['heatmap'] = heatmap_l.item()
                 else:
                     total_loss['heatmap'] += heatmap_l.item()
             else:
                 heatmap = None
+
             corner_pred = model.cornerEvaluator(mask, img_volume, binmap=binmap, heatmap=heatmap)
             edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
                                         torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device),
                                             binmap=binmap, heatmap=heatmap)
+
+            cornerMask_gt = torch.where(corner_gt_mask>0.5)
+            cornerMask_pred = torch.where(corner_pred>0.5)
+            corner_l = 0
+            if cornerMask_gt[0].shape[0] > 0:
+                corner_l += 0.3*cornerloss(corner_pred[cornerMask_gt], corner_gt_mask[cornerMask_gt]) 
+            if cornerMask_pred[0].shape[0] > 0:
+                corner_l += 0.3*cornerloss(corner_pred[cornerMask_pred], corner_gt_mask[cornerMask_pred])
+            corner_l += 0.3*cornerloss(corner_pred, corner_gt_mask)
+
             if 'corner' not in total_loss.keys():
-                total_loss['corner'] = cornerloss(corner_pred, corner_gt_mask).item()
+                total_loss['corner'] = corner_l.item()#cornerloss(corner_pred, corner_gt_mask).item()
             else:
-                total_loss['corner'] += cornerloss(corner_pred, corner_gt_mask).item()
+                total_loss['corner'] += corner_l.item()#cornerloss(corner_pred, corner_gt_mask).item()
             if 'edge' not in total_loss.keys():
                 total_loss['edge'] = edgeloss(edge_pred, gt_edge).item()
             else:
@@ -68,17 +88,17 @@ def test(dataloader, model, edge_bin_size):
                 edge_gt_pseudo = numerator / denominator
                 edge_gt_pseudo = (edge_gt_pseudo > 0.8).long()
                 if 'edge_cross' not in total_loss.keys():
-                    total_loss['edge_cross'] = edgeloss(edge_pred, edge_gt_pseudo).item()
+                    total_loss['edge_cross'] = 0.0*edgeloss(edge_pred, 1-edge_gt_pseudo).item()
                 else:
-                    total_loss['edge_cross'] += edgeloss(edge_pred, edge_gt_pseudo).item()
+                    total_loss['edge_cross'] += 0.0*edgeloss(edge_pred, 1-edge_gt_pseudo).item()
 
                 # corner pseudo
                 corner_input_mask = (mask[:, 1:]+1)/2
                 corner_gt_pseudo = torch.mul(corner_input_mask, pseudo_corner_map)
                 if 'corner_cross' not in total_loss.keys():
-                    total_loss['corner_cross'] = cornerloss(corner_pred, corner_gt_pseudo).item()
+                    total_loss['corner_cross'] = cornerloss(corner_pred, 1-corner_gt_pseudo).item()
                 else:
-                    total_loss['corner_cross'] += cornerloss(corner_pred, corner_gt_pseudo).item()
+                    total_loss['corner_cross'] += cornerloss(corner_pred, 1-corner_gt_pseudo).item()
 
             batch_count += 1
 
@@ -114,8 +134,18 @@ def train(dataloader, model, edge_bin_size):
             heatmap = model.getheatmap(img)
             heatmap_detach = heatmap
             gt_heat_map = data['gt_heat_map'].to(model.device)
-            heatmap_l = heatmaploss(heatmap, gt_heat_map)
+            
+            heatmapMask_gt = torch.where(gt_heat_map>0.5)
+            heatmapMask_pred = torch.where(heatmap>0.5)
+            heatmap_l = 0
+            if heatmapMask_gt[0].shape[0] > 0:
+                heatmap_l += 0.3*heatmaploss(heatmap[heatmapMask_gt], gt_heat_map[heatmapMask_gt])
+            if heatmapMask_pred[0].shape[0] > 0:
+                heatmap_l += 0.3*heatmaploss(heatmap[heatmapMask_pred], gt_heat_map[heatmapMask_pred])
+            heatmap_l += 0.3*heatmaploss(heatmap, gt_heat_map)
+
             loss_dict['heatmap'] = heatmap_l
+
         else:
             heatmap = None
             heatmap_detach = None
@@ -123,7 +153,16 @@ def train(dataloader, model, edge_bin_size):
         edge_pred = model.edgeEvaluator(edge_mask, mask, img_volume, corner_pred.detach(),
                                         torch.zeros(edge_mask.shape[0], edge_bin_size, device=model.device),
                                         binmap=binmap_detach, heatmap=heatmap_detach)
-        corner_l = cornerloss(corner_pred, corner_gt_mask)
+
+        cornerMask_gt = torch.where(corner_gt_mask>0.5)
+        cornerMask_pred = torch.where(corner_pred>0.5)
+        corner_l = 0
+        if cornerMask_gt[0].shape[0] > 0:
+            corner_l += 0.3*cornerloss(corner_pred[cornerMask_gt], corner_gt_mask[cornerMask_gt]) 
+        if cornerMask_pred[0].shape[0] > 0:
+            corner_l += 0.3*cornerloss(corner_pred[cornerMask_pred], corner_gt_mask[cornerMask_pred]) 
+        corner_l += 0.3*cornerloss(corner_pred, corner_gt_mask)
+
         edge_l = edgeloss(edge_pred, gt_edge)
         loss_dict['corner'] = corner_l
         loss_dict['edge'] = edge_l
@@ -141,7 +180,7 @@ def train(dataloader, model, edge_bin_size):
             pseudo_corner_score = pseudo_corner_score > 0.8
             pseudo_corner_score = pseudo_corner_score[:,0] & pseudo_corner_score[:,1] # two corners must all be classified as True
             edge_gt_pseudo = ((edge_gt_pseudo > 0.8) & pseudo_corner_score).long()
-            loss_dict['edge_cross'] = edgeloss(edge_pred, edge_gt_pseudo)
+            loss_dict['edge_cross'] = edgeloss(edge_pred, 1-edge_gt_pseudo)
 
             # corner pseudo
             ### test ###
@@ -158,7 +197,7 @@ def train(dataloader, model, edge_bin_size):
             elif key == 'heatmap':
                 loss += loss_dict[key] * 5
             elif key == 'edge_cross':
-                loss += loss_dict[key] * 0.1
+                loss += loss_dict[key] * 0.0 #0.1
             elif key == 'corner_cross':
                 loss += loss_dict[key]
 
@@ -201,7 +240,7 @@ class trainThread(threading.Thread):
         testbest = 10
         while True:
             train_sample = 0
-            for _ in range(3):
+            for _ in range(1):
                 print('{}[training thread]{} New start {}! training with {} samples'.format(
                     Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
                 train(self.dataloader, self.evaluator, edge_bin_size)
@@ -265,12 +304,7 @@ class searchThread(threading.Thread):
                 gt_corners = np.round(gt_corners).astype(np.int)
                 gt_edges = gt_data['edges']
 
-                #try:
                 initial_candidate = Candidate.initial(Graph(corners, edges), name)
-                #self.lock.acquire()
-                #self.evaluator.get_score(initial_candidate)
-                #self.lock.release()
-
                 prev_candidates = [initial_candidate]
 
                 for epoch_i in range(beam_depth):
@@ -287,9 +321,7 @@ class searchThread(threading.Thread):
 
                     if search_with_evaluator:
                         for candidate_ in current_candidates:
-                            self.lock.acquire()
                             self.evaluator.get_score(candidate_, all_edge=True)
-                            self.lock.release()
                         current_candidates = sorted(current_candidates, key=lambda x:x.graph.graph_score(), reverse=True)
                         if len(current_candidates) < beam_width:
                             pick = np.arange(len(current_candidates))
@@ -311,9 +343,7 @@ class searchThread(threading.Thread):
                         if corners_array.shape[0] == 0 or edges_array.shape[0] == 0:
                             continue
                         data = self.train_dataset.make_data(candidate_.name, corners_array, edges_array)
-                        self.lock.acquire()
                         self.new_data_memory.append(data)
-                        self.lock.release()
                         add_count += 1
 
                     for candidate_ in prev_candidates:
@@ -324,7 +354,7 @@ class searchThread(threading.Thread):
                 #    continue
 
                 search_count += 1
-                if (idx+1) % 50 == 0:
+                if (idx+1) % 5 == 0:
                     print('{}[seaching thread]{} Already search {} graphs and add {} '
                           'graphs into database'.format(Fore.RED, Style.RESET_ALL, search_count, add_count))
                     print('{}[seaching thread]{} {} remain in the swap'
@@ -479,15 +509,15 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 # evaluator_train is used for training
 # evaluator_search is used for searching
 # separate into two modules in order to use multiple threads to accelerate
-evaluator_train = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
+evaluator_train = scoreEvaluator_with_train(data_folder,
                                             backbone_channel=64, edge_bin_size=edge_bin_size,
                                             corner_bin=False)
 if search_with_evaluator:
-    evaluator_search = scoreEvaluator_with_train('/local-scratch/fuyang/cities_dataset',
+    evaluator_search = scoreEvaluator_with_train(data_folder,
                                                 backbone_channel=64, edge_bin_size=edge_bin_size,
                                                 corner_bin=False)
     evaluator_search.load_state_dict(evaluator_train.state_dict())
-    evaluator_search.to('cuda:1')
+    evaluator_search.to('cuda:0')
     evaluator_search.eval()
 else:
     evaluator_search = None
@@ -513,11 +543,7 @@ data_memory = []
 st = searchThread(lock, evaluator_search, search_loader, data_memory, train_dataset, search_dataset)
 tt = trainThread(lock, evaluator_train, evaluator_search, data_memory, train_loader, train_dataset, test_loader)
 
-if activate_search_thread:
-    st.start()
+#st.start()
 tt.start()
 
-if activate_search_thread:
-    st.join()
-tt.join()
 
