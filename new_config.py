@@ -14,8 +14,8 @@ TWO_CORNER_MINIMUM_DISTANCE = 5
 score_weights = (1., 2., 100.)
 
 mode = 'strong'
-data_folder = '/local-scratch/fuyang/cities_dataset'
-save_path = '/local-scratch/fuyang/result/beam_search_v2/{}_constraint_heatmap_orthogonal/'.format(mode)
+data_folder = '/local-scratch/project/datasets/cities_dataset'
+save_path = './result/beam_search_v2/{}_constraint_heatmap_orthogonal/'.format(mode)
 #pretrained_path = '/local-scratch/fuyang/result/beam_search_v2/without_search_{}_constraint/'.format(mode)
 
 edge_strong_constraint = True if mode == 'strong' else False
