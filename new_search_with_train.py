@@ -240,7 +240,7 @@ class trainThread(threading.Thread):
         testbest = 10
         while True:
             train_sample = 0
-            for _ in range(1):
+            for _ in range(3):
                 print('{}[training thread]{} New start {}! training with {} samples'.format(
                     Fore.BLUE, Style.RESET_ALL, prefix, len(self.dataset)))
                 train(self.dataloader, self.evaluator, edge_bin_size)
