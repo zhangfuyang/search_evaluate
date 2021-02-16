@@ -241,7 +241,7 @@ class myDataset(Dataset):
         #gt_mask_original = render(gt_data['corners']+noise,
         #                          gt_data['edges'], self.render_pad, self.edge_linewidth)
 
-        img = skimage.img_as_float(plt.imread(os.path.join('/local-scratch/fuyang/cities_dataset/rgb', name+'.jpg')))
+        img = skimage.img_as_float(plt.imread(os.path.join(data_folder, 'rgb', name+'.jpg')))
         ### test ###
         #plt.subplot(121)
         #plt.imshow(input_edge_mask.transpose(1,2,0))
