@@ -3,7 +3,7 @@ std = [0.229, 0.224, 0.225]
 MAX_DATA_STORAGE = 60000
 
 activate_search_thread = True
-search_with_evaluator = True
+search_with_evaluator = False
 beam_width = 10  # for search thread
 beam_depth = 5  # for search thread
 data_scale = 1. #TODO: adapt to scale
