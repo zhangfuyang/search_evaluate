@@ -47,7 +47,7 @@ class trainThread(threading.Thread):
 
             start_time = time.time()
             num_batch = len(self.dataset) / config['batchsize']
-            for _ in range(3):
+            for _ in range(5):
                 for iteration, data in enumerate(self.dataloader):
                     img = data['img'].to(self.device)
                     target_heatmap = data['gt_heat_map'].to(self.device)
@@ -62,9 +62,10 @@ class trainThread(threading.Thread):
                     edge_pred = self.model.edgeEvaluator(mask.detach(), img_volume, heatmap_pred.detach()) #(bs, 2, 256, 256)
                     edge_pred_c1 = edge_pred[:,0:1]  # edge
                     edge_pred_c2 = edge_pred[:,1:]  # input mask corner
+
                     # Mask
                     _mask_ = mask.clone()
-                     _mask_[_mask_<=0] = 0
+                    _mask_[_mask_<=0] = 0
                     mask_edge = (_mask_[:,0]>0.5).unsqueeze(1).detach()
                     mask_corner = (_mask_[:,1]>0.5).unsqueeze(1).detach()
 
@@ -98,26 +99,26 @@ class trainThread(threading.Thread):
                 self.searchModel.load_state_dict(self.model.state_dict())
                 self.lock.release() 
 
-        # Save model weights
-        if (epoch+1) % config['save_freq'] == 0:
-            self.model.store_weight(config['save_path'], str(epoch+1))
+            # Save model weights
+            if (epoch+1) % config['save_freq'] == 0:
+                self.model.store_weight(config['save_path'], str(epoch+1))
         
-        # LR decay
-        self.scheduler.step()
+            # LR decay
+            self.scheduler.step()
 
-        print("--- %s seconds for one epoch ---" % (time.time() - start_time))
-        for param_group in self.optimizer.param_groups:
-            lr = param_group['lr']
+            print("--- %s seconds for one epoch ---" % (time.time() - start_time))
+            for param_group in self.optimizer.param_groups:
+                lr = param_group['lr']
             break
-        print('Learning Rate: %s' % str(lr))
-        start_time = time.time()
+            print('Learning Rate: %s' % str(lr))
+            start_time = time.time()
 
            
-        self.lock.acquire()
-        while len(self.data_memory) != 0:
-            data = self.data_memory.pop()
-            self.dataset._add_processed_data_(data)
-        self.lock.release()
+            self.lock.acquire()
+            while len(self.data_memory) != 0:
+                data = self.data_memory.pop()
+                self.dataset._add_processed_data_(data)
+            self.lock.release()
            
  
          
