@@ -99,26 +99,26 @@ class trainThread(threading.Thread):
                 self.searchModel.load_state_dict(self.model.state_dict())
                 self.lock.release() 
 
-        # Save model weights
-        if (epoch+1) % config['save_freq'] == 0:
-            self.model.store_weight(config['save_path'], str(epoch+1))
+            # Save model weights
+            if (epoch+1) % config['save_freq'] == 0:
+                self.model.store_weight(config['save_path'], str(epoch+1))
         
-        # LR decay
-        self.scheduler.step()
+            # LR decay
+            self.scheduler.step()
 
-        print("--- %s seconds for one epoch ---" % (time.time() - start_time))
-        for param_group in self.optimizer.param_groups:
-            lr = param_group['lr']
-            break
-        print('Learning Rate: %s' % str(lr))
-        start_time = time.time()
+            print("--- %s seconds for one epoch ---" % (time.time() - start_time))
+            for param_group in self.optimizer.param_groups:
+                lr = param_group['lr']
+                break
+            print('Learning Rate: %s' % str(lr))
+            start_time = time.time()
 
            
-        self.lock.acquire()
-        while len(self.data_memory) != 0:
-            data = self.data_memory.pop()
-            self.dataset._add_processed_data_(data)
-        self.lock.release()
+            self.lock.acquire()
+            while len(self.data_memory) != 0:
+                data = self.data_memory.pop()
+                self.dataset._add_processed_data_(data)
+            self.lock.release()
            
  
          
