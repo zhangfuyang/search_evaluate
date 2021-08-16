@@ -41,6 +41,8 @@ Alternatively, you can check out our interactive [Colab Notebook](https://colab.
 
 ## Running the Code
 
+### Training
+
 ```
 python demo.py --filename input/000000038829.jpg
 ```
@@ -48,19 +50,14 @@ python demo.py --filename input/000000038829.jpg
 We also have a [Colab Notebook](https://colab.research.google.com/drive/1QIoL2g0jdt5E-vYKCIojkIz21j3jyEvo?usp=sharing)
 to interactively visualize the outputs.
 
+### Evaluation
+
 
 ## Pretrained Models
 
 
-## License
 
-Our code is released under CC BY-NC 4.0. However, our code depends on other libraries,
-including SMPL, which each have their own respective licenses that must also be
-followed.
-
-
-## <a name="Citing"></a>Citing Our Work
-
+## <a name="Citing"></a>Citation
 If you use find this code helpful, please consider citing:
 ```BibTeX
 @InProceedings{zhang2020phosa,
@@ -70,5 +67,6 @@ If you use find this code helpful, please consider citing:
     year = {2020},
 }
 ```
-
+## Contact
+If you have any questions, please contact fuyangz@sfu.ca or xuxiangx@sfu.ca
 
