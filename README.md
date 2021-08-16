@@ -49,6 +49,13 @@ We also have a [Colab Notebook](https://colab.research.google.com/drive/1QIoL2g0
 to interactively visualize the outputs.
 
 
+## License
+
+Our code is released under CC BY-NC 4.0. However, our code depends on other libraries,
+including SMPL, which each have their own respective licenses that must also be
+followed.
+
+
 ## <a name="Citing"></a>Citing Our Work
 
 If you use find this code helpful, please consider citing:
@@ -61,8 +68,4 @@ If you use find this code helpful, please consider citing:
 }
 ```
 
-## License
 
-Our code is released under CC BY-NC 4.0. However, our code depends on other libraries,
-including SMPL, which each have their own respective licenses that must also be
-followed.
