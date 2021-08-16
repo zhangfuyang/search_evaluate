@@ -13,7 +13,7 @@ In ICCV 2021
 
 ## Requirements
 * Python (tested on 3.7)
-* Pytorch (tested on 1.4)
+* Pytorch (tested on 1.7)
 * [Neural Mesh Renderer](https://github.com/JiangWenPL/multiperson/tree/master/neural_renderer)
 * [PointRend (from Detectron)](https://github.com/facebookresearch/detectron2/tree/master/projects/PointRend)
 * [BodyMocap](https://github.com/facebookresearch/frankmocap/)
