@@ -92,7 +92,7 @@ We also have a [Colab Notebook](https://colab.research.google.com/drive/1QIoL2g0
 to interactively visualize the outputs.
 
 
-## <a name="CitingPHOSA"></a>Citing PHOSA
+## <a name="Citing"></a>Citing Our Work
 
 If you use find this code helpful, please consider citing:
 ```BibTeX
