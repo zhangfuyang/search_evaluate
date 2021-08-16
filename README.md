@@ -9,7 +9,7 @@ Fuyang Zhang, Xiang Xu, Nelson Nauata, Yasutaka Furukawa.
 
 In ICCV 2021
 
-[<img src="images/teaser.png" width="500">](xxx)
+[<img src="images/teaser.png" width="2000">](xxx)
 
 ## Requirements
 * Python (tested on 3.7)
