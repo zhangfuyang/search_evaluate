@@ -44,7 +44,7 @@ First, perform search over the test data:
 python search_result.py
 ```
 
-Then evaluate scores using:
+Then, evaluate scores using:
 ```
 python metric_for_result.py
 ```
