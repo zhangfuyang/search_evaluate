@@ -25,21 +25,32 @@ $ pip install -r requirements.txt
 ```
 
 
+## Data 
+Download data from here...
+
 ## Running the Code
 
 ### Training
-
 ```
 python train_evaluators.py
 ```
 
-You can change the configuration parameters in config.py.
+You can change the configurations in `config.py`.
 
 ### Evaluation
+First, perform search over the test data:
 
+```
+python search_result.py
+```
+
+Then evaluate scores using:
+```
+python metric_for_result.py
+```
 
 ### Pretrained models
-
+We provide pretrained models here...
 
 
 ## <a name="Citing"></a>Citation
