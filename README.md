@@ -20,7 +20,7 @@ In ICCV 2021
 We recommend using a conda environment:
 
 ```bash
-conda create -n phosa python=3.7
+conda create -n sae python=3.7
 conda activate sae
 pip install -r requirements.txt
 ```
