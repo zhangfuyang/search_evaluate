@@ -4,7 +4,3 @@ opencv-python
 svgwrite
 colorama
 dicttoxml
-
---find-links https://download.pytorch.org/whl/torch_stable.html
-torch==1.9.0+cu111
-torchvision==0.10.0+cu111
