@@ -11,14 +11,17 @@ In ICCV 2021
 
 [<img src="images/teaser.png" width="2000">](xxx)
 
-## Requirements
-* Python (tested on 3.7)
-* Pytorch (tested on 1.7)
+## Prerequisites
+- Linux
+- NVIDIA GPU + CUDA CuDNN
+- Python 3.7, PyTorch 1.7+
 
- To install additional required libraries:
+## Dependencies
+
+Install python package dependencies through pip:
 
 ```bash
-pip install -r requirements.txt
+$ pip install -r requirements.txt
 ```
 
 
@@ -27,11 +30,10 @@ pip install -r requirements.txt
 ### Training
 
 ```
-python demo.py --filename input/000000038829.jpg
+python train_evaluators.py
 ```
 
-We also have a [Colab Notebook](https://colab.research.google.com/drive/1QIoL2g0jdt5E-vYKCIojkIz21j3jyEvo?usp=sharing)
-to interactively visualize the outputs.
+You can change the configuration parameters in config.py.
 
 ### Evaluation
 
