@@ -17,7 +17,7 @@ In ICCV 2021
 
 ## Installation
 
-We recommend using a conda environment:
+We recommend using a conda environment, install additional required libraries:
 
 ```bash
 conda create -n sae python=3.7
