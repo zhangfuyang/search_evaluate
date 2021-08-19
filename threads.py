@@ -41,7 +41,7 @@ class trainThread(threading.Thread):
             
             if epoch > 0:
                 # Wait for buffer
-                while len(self.data_memory) <= 500*config['graph_per_data']:  
+                while len(self.data_memory) <= 600*config['graph_per_data']:  
                     print('waiting for search...')
                     print(len(self.data_memory))
                     time.sleep(120)
