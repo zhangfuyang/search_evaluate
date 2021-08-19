@@ -59,7 +59,7 @@ Download individual pretrained model and its beam search results.
 
 | **Training Dataset** | **Model Weights** | **Beam Search Results**|
 |--------------------|-----------|----------------------|
-
+| NYUv2              | RGBD      | raw sensor depth     |
 
 
 ## <a name="Citing"></a>Citation
