@@ -30,7 +30,7 @@ Download the processed data from this [link](https://drive.google.com/file/d/1T7
 
 Download the pretrained heatmap weights from this [link](). 
 
-Both data are required for training and evaluation, unzip both and move them to the `data` folder. 
+Both data are required for training and evaluation, unzip and move them to the `data` folder. 
 
 ## Running the Code
 
