@@ -26,7 +26,7 @@ $ pip install -r requirements.txt
 
 
 ## Data 
-Download the processed data from this [link](https://drive.google.com/file/d/1T7l1UbS4MtdbUCxpAwgJhHCESAZvtvqa/view?usp=sharing). The zip file includes the original cities dataset from ["Vectorizing World Buildings: Planar Graph Reconstruction by Primitive Detection and Relationship Classification"](https://arxiv.org/abs/1912.05135), and predictions from Conv-MPN, IP and Per-Edge models.
+Download the processed data from this [link](https://drive.google.com/file/d/1T7l1UbS4MtdbUCxpAwgJhHCESAZvtvqa/view?usp=sharing). This includes the original cities dataset from ["Vectorizing World Buildings: Planar Graph Reconstruction by Primitive Detection and Relationship Classification"](https://arxiv.org/abs/1912.05135) and predictions from Conv-MPN, IP and Per-Edge models.
 
 Download the pretrained heatmap weights from this [link](https://drive.google.com/file/d/162V03dUC4Zxj-RK4N8rUOjOau4cFgUX3/view?usp=sharing). 
 
