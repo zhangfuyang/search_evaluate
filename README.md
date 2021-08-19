@@ -3,13 +3,13 @@
 Fuyang Zhang, Xiang Xu, Nelson Nauata, Yasutaka Furukawa.
 
 
-[[`arXiv`](https://arxiv.org/pdf/2108.07990.pdf)]
+[[`arXiv`](https://arxiv.org/abs/2108.07990)]
 [[`Project Page`](xxx)]
 [[`Bibtex`](#Citing)]
 
 In ICCV 2021
 
-[<img src="images/teaser.png" width="2000">](https://arxiv.org/pdf/2108.07990.pdf)
+[<img src="images/teaser.png" width="2000">](https://arxiv.org/abs/2108.07990)
 
 ## Prerequisites
 - Linux
