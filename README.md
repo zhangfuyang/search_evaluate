@@ -43,13 +43,13 @@ This will start both the train and search threads.
 You can change settings like beam search depth or number of training epochs in the `config.py`.
 
 ### Evaluation
-First, perform search over the test data:
+First, perform beam search over all the test data:
 
 ```
 python search_result.py
 ```
 
-Then, evaluate scores using:
+Then, evaluate the scores:
 ```
 python metric_for_result.py
 ```
