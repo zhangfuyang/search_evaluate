@@ -14,7 +14,7 @@ beam_depth = 5
 epsilon = 0.2
 
 data_folder = '/local-scratch/projects/sae/datasets/cities_dataset'
-exp_path = './exp_run1'
+exp_path = './exp_run'
 exp_name = 'convmpn' 
 save_path = os.path.join(exp_path, exp_name)
 
