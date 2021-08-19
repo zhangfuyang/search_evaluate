@@ -37,7 +37,7 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
 device = torch.device("cuda:0")
 evaluator_search = Model(config['data_folder'], device, backbone_channel=64)
 evaluator_search.load_weight(config['save_path'], prefix)
-path = './result/pretrained_heatmap'
+path = './data/pretrained_heatmap'
 with open(os.path.join(path, '{}_{}.pt'.format(9, 'heatmapNet')), 'rb') as f:
     evaluator_search.heatmapNet.load_state_dict(torch.load(f))
 evaluator_search.to(device)
