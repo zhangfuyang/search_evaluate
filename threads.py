@@ -1,20 +1,25 @@
 import random 
 from colorama import Fore, Style
-from utils import visualization, candidate_enumerate_training, reduce_duplicate_candidate, Graph, Candidate
+from new_utils import visualization, candidate_enumerate_training, reduce_duplicate_candidate, Graph, Candidate
 import threading
 import numpy as np
 import os
-from utils import remove_intersection_and_duplicate, sort_graph
+from new_utils import remove_intersection_and_duplicate, sort_graph
 from config import config 
 import time 
 import torch 
 import torch.nn.functional as F
-from dataset import EvaluatorDataset
-from scoreAgent import *
+from multiprocessing import Manager
+import matplotlib.pyplot as plt
+from new_dataset import EvaluatorDataset
+from new_scoreAgent import *
+import pdb
+import threading
 
 cornerLoss = torch.nn.L1Loss()
 edgeLoss = torch.nn.L1Loss()
 heatmapLoss = torch.nn.MSELoss()
+
 
 
 class trainThread(threading.Thread):
@@ -40,8 +45,8 @@ class trainThread(threading.Thread):
         for epoch in range(config['num_epochs']):
             
             if epoch > 0:
-                # Wait for buffer
-                while len(self.data_memory) <= 600*config['graph_per_data']:  
+                # Wait for search thread if too fast
+                while len(self.data_memory) <= 120*config['graph_per_data']:  
                     print('waiting for search...')
                     print(len(self.data_memory))
                     time.sleep(120)
@@ -53,56 +58,47 @@ class trainThread(threading.Thread):
                 self.lock.release()
             
             start_time = time.time()
-            for _ in range(5):  
-                num_batch = len(self.dataset) / config['batchsize']
-                for iteration, data in enumerate(self.dataloader):
-                    img = data['img'].to(self.device)
-                    target_heatmap = data['gt_heat_map'].to(self.device)
-                    mask = data['mask'].to(self.device)
+            num_batch = len(self.dataset) / config['batchsize']
+            for iteration, data in enumerate(self.dataloader):
+                img = data['img'].to(self.device)
+                target_heatmap = data['gt_heat_map'].to(self.device)
+                mask = data['mask'].to(self.device)
 
-                    target_edgeMask = data['edge_gt_mask'].to(self.device)
-                    target_cornerMask = data['corner_gt_mask'].to(self.device)
+                target_edgeMask = data['edge_gt_mask'].to(self.device)
+                target_cornerMask = data['corner_gt_mask'].to(self.device)
 
-                    #with torch.no_grad():
-                    heatmap_pred = self.model.getheatmap(img) #(bs, 2, 256, 256)
+                heatmap_pred = self.model.getheatmap(img) 
 
-                    img_volume = self.model.imgvolume(img)  # (bs, 64, 256, 256)
-                    corner_pred = self.model.cornerEvaluator(mask.detach(), img_volume, heatmap_pred) #(bs, 1, 256, 256)
-                    edge_pred = self.model.edgeEvaluator(mask.detach(), img_volume, heatmap_pred) #(bs, 1, 256, 256)
+                img_volume = self.model.imgvolume(img) 
+                corner_pred = self.model.cornerEvaluator(mask.detach(), img_volume, heatmap_pred) 
+                edge_pred = self.model.edgeEvaluator(mask.detach(), img_volume, heatmap_pred) 
                     
-                    # Mask
-                    _mask_ = mask.clone()
-                    _mask_[_mask_<=0] = 0
-                    mask_edge = (_mask_[:,0]>0.5).unsqueeze(1).detach()
-                    mask_corner = (_mask_[:,1]>0.5).unsqueeze(1).detach()
-
-                    # Relaxed gt labels (0.9, 0.1)
-                    gt_heatmap_relax = target_heatmap 
-                    gt_edge_relax = target_edgeMask
-                    gt_corner_relax = target_cornerMask 
+                _mask_ = mask.clone()
+                _mask_[_mask_<=0] = 0
+                mask_edge = (_mask_[:,0]>0.5).unsqueeze(1).detach()
+                mask_corner = (_mask_[:,1]>0.5).unsqueeze(1).detach()
             
-                    heatmap_l = heatmapLoss(heatmap_pred, gt_heatmap_relax)
+                heatmap_l = heatmapLoss(heatmap_pred, target_heatmap)
                                     
-                    edge_l = 2.0*F.smooth_l1_loss(edge_pred*mask_edge, gt_edge_relax*mask_edge, beta=0.5) +\
-                                 F.smooth_l1_loss(edge_pred*(~mask_edge), gt_edge_relax*(~mask_edge), beta=0.5) 
+                edge_l = 2.0*F.smooth_l1_loss(edge_pred*mask_edge, target_edgeMask*mask_edge, beta=0.5) +\
+                                F.smooth_l1_loss(edge_pred*(~mask_edge), target_edgeMask*(~mask_edge), beta=0.5) 
 
-                    corner_l = 2.0*F.smooth_l1_loss(corner_pred*mask_corner, gt_corner_relax*mask_corner, beta=0.5) +\
-                                   F.smooth_l1_loss(corner_pred*(~mask_corner), gt_corner_relax*(~mask_corner), beta=0.5)
+                corner_l = 2.0*F.smooth_l1_loss(corner_pred*mask_corner, target_cornerMask*mask_corner, beta=0.5) +\
+                                F.smooth_l1_loss(corner_pred*(~mask_corner), target_cornerMask*(~mask_corner), beta=0.5)
 
-                    self.optimizer.zero_grad()
-                    loss =  corner_l + edge_l + heatmap_l
-                    loss.backward()
-                    self.optimizer.step()
+                self.optimizer.zero_grad()
+                loss =  corner_l + edge_l + heatmap_l
+                loss.backward()
+                self.optimizer.step()
        
-                    if iteration % config['print_freq'] == 0:
-                        print('[Epoch %d: %d/%d] heat loss: %.4f, corner loss: %.4f, edge loss: %.4f, total loss: %.4f' % 
-                            (epoch, iteration+1, num_batch, heatmap_l.item(), edge_l.item(), corner_l.item(), loss.item()))
+                if iteration % config['print_freq'] == 0:
+                    print('[Epoch %d: %d/%d] heat loss: %.4f, corner loss: %.4f, edge loss: %.4f, total loss: %.4f' % 
+                        (epoch, iteration+1, num_batch, heatmap_l.item(), edge_l.item(), corner_l.item(), loss.item()))
                 
                 # Update search model
                 self.lock.acquire()
                 self.searchModel.load_state_dict(self.model.state_dict())
                 self.lock.release()
-                
                 
             # Save model weights
             if (epoch+1) % config['save_freq'] == 0:
@@ -130,6 +126,7 @@ class searchThread(threading.Thread):
         self.train_dataset = train_dataset
         self.model = model
         self.data_memory = data_memory
+
 
     def run(self):
         """data augmentation."""
@@ -163,7 +160,7 @@ class searchThread(threading.Thread):
                         prev_ = prev_candidates[prev_i]
                         if len(prev_.graph.getCorners()) == 0 or len(prev_.graph.getEdges()) == 0:
                             continue
-                        # Extend graph (fast version) 
+                        # Extend graph 
                         current_candidates.extend(candidate_enumerate_training(prev_, gt_data))
                     
                     # Reduce duplicate
@@ -186,7 +183,6 @@ class searchThread(threading.Thread):
                         else:
                             selected_next_candidates.append(random.sample(current_candidates, 1)[0])
                     
-                    #selected_next_candidates = top_k_next_candidates
                     sampled_data += selected_next_candidates
                     
                     # set next state as current state         
@@ -211,6 +207,3 @@ class searchThread(threading.Thread):
                         self.data_memory.append(data)
 
             
-
-
-   
