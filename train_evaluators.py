@@ -1,4 +1,4 @@
-import os
+=import os
 import numpy as np
 from torch.utils.data import Dataset
 import torch
@@ -29,7 +29,7 @@ device2 = torch.device("cuda:1")
 
 # Initialize network
 model = Model(config['data_folder'], device1, backbone_channel=64)
-with open(os.path.join('./result/pretrained_heatmap', '{}_{}.pt'.format(9, 'heatmapNet')), 'rb') as f:
+with open(os.path.join('./data/pretrained_heatmap', '{}_{}.pt'.format(9, 'heatmapNet')), 'rb') as f:
     model.heatmapNet.load_state_dict(torch.load(f))
 model.heatmapNet.eval()
 model.to(device1)
@@ -60,9 +60,4 @@ tt.start()
 st.start()
 tt.join()
 st.join()
-
-
-
-
-
 
