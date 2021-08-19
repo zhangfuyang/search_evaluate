@@ -18,7 +18,7 @@ In ICCV 2021
 
 ## Dependencies
 
-Install additional python package dependencies:
+Install additional dependencies:
 
 ```bash
 $ pip install -r requirements.txt
