@@ -15,7 +15,6 @@ from utils import get_corner_label, get_edge_label
 MAX_DATA_STORAGE = 20000 #1500
 
 
-
 class EvaluatorDataset(Dataset):
     def __init__(self, datapath, phase='train', edge_strong_constraint=False):
         super(EvaluatorDataset, self).__init__()
@@ -41,7 +40,6 @@ class EvaluatorDataset(Dataset):
                 conv_data = np.load(os.path.join(self.convmpn_datapath, name+'.npy'), allow_pickle=True).tolist()
                 conv_data['corners'], conv_data['edges'] = \
                     remove_intersection_and_duplicate(conv_data['corners'], conv_data['edges'], name)
-                #conv_data['corners'] = np.round(conv_data['corners']).astype(int)
                 conv_data['corners'], conv_data['edges'] = sort_graph(conv_data['corners'], conv_data['edges'])
 
                 corners = conv_data['corners']
@@ -73,15 +71,9 @@ class EvaluatorDataset(Dataset):
 
                 self.add_data(name, corners, edges)
 
-
     def __len__(self):
-        #if len(self.new_data) == 0:
-            #self.merged_data = self.database
-        #else:
-            #self.merged_data = self.new_data
         self.merged_data = self.database + self.new_data
         return len(self.merged_data)
-
 
     def __getitem__(self, idx):
         data = self.merged_data[idx]
@@ -126,27 +118,7 @@ class EvaluatorDataset(Dataset):
         out_data['corner_gt_mask'] = corner_gt_mask
         out_data['edge_gt_mask'] = edge_gt_mask
         out_data['name'] = name
-        
-        '''
-        out_data['orig_img'] = img_orig
-        # generate edge masks 
-        edge_masks = []
-        for ii in range(edges.shape[0]):
-            edge = edges[ii][np.newaxis,:]
-            edge_mask = render(corners, edge, render_pad=0, scale=1)[0:1]
-            edge_masks.append(edge_mask)
-
-        #print(avg_edge_len)
-        edge_masks = np.array(edge_masks)
-        edge_masks = torch.FloatTensor(edge_masks)
-        edge_correct_id = torch.LongTensor(edge_correct_id)
-
-        out_data['edge_correct_id'] = edge_correct_id
-        out_data['edge_masks'] = edge_masks
-        '''
-
         return out_data
-
 
     def make_data(self, name, corners, edges):
         gt_data = self.ground_truth[name]
@@ -167,35 +139,23 @@ class EvaluatorDataset(Dataset):
                 corners, gt_corners, edges, gt_edges,
                 map_same_location)
 
-        #corner_label, corner_assignment = get_corner_label(gt_corners, corners, 7) # corner labels 
-        #edge_label = get_edge_label(edges, corner_label, corner_assignment, gt_edges) # edge labels 
-  
         return {'name': name, 'corners': corners, 'edges': edges,
                               'corner_false_id': list(corner_false_id),
                               'edge_false_id': edge_false_id}
 
-
     def add_processed_data(self, data):
-        #if len(self.database) >= MAX_DATA_STORAGE:
-            #del self.database[0]
         self.database.append(data)
-
 
     def add_data(self, name, corners, edges):
         return self.add_processed_data(self.make_data(name, corners, edges))
-
 
     def _add_processed_data_(self, data):
         if len(self.new_data) >= MAX_DATA_STORAGE:
             del self.new_data[0]
         self.new_data.append(data)
 
-
     def _add_data_(self, name, corners, edges):
         return self._add_processed_data_(self.make_data(name, corners, edges))
-
-
-
 
 
 class myDataset(Dataset):
@@ -208,9 +168,7 @@ class myDataset(Dataset):
 
         with open(name, 'r') as f:
             namelist = f.read().splitlines()
-
-        namelist = namelist[175:]
-
+       
         # load conv-mpn result
         conv_mpn_datapath = os.path.join(self.datapath, 'data/conv-mpn')
         gt_datapath = os.path.join(self.datapath, 'data/gt')
@@ -221,7 +179,6 @@ class myDataset(Dataset):
                 conv_data = np.load(os.path.join(conv_mpn_datapath, name+'.npy'), allow_pickle=True).tolist()
                 conv_data['corners'], conv_data['edges'] = \
                     remove_intersection_and_duplicate(conv_data['corners'], conv_data['edges'], name)
-                #conv_data['corners'] = np.round(conv_data['corners']).astype(int)
                 conv_data['corners'], conv_data['edges'] = sort_graph(conv_data['corners'], conv_data['edges'])
                 gt_data = np.load(os.path.join(gt_datapath, name+'.npy'), allow_pickle=True).tolist()
                 gt_data['corners'], gt_data['edges'] = sort_graph(gt_data['corners'], gt_data['edges'])
@@ -242,48 +199,7 @@ class myDataset(Dataset):
         img = skimage.img_as_float(plt.imread(os.path.join(self.datapath, 'rgb', name+'.jpg')))
         img = img.transpose((2,0,1))
         img = (img - np.array(config['mean'])[:, np.newaxis, np.newaxis]) / np.array(config['std'])[:, np.newaxis, np.newaxis]
-
-
         data =  {
             'img': img,
             'name': name}
         return data
-
-
-def test(): 
-    dataset = EvaluatorDataset(config['data_folder'], phase='train',  edge_strong_constraint=False)
-    dataloader = torch.utils.data.DataLoader(dataset,
-                                          batch_size=1,
-                                          shuffle=False,
-                                          num_workers=4)
-    print(len(dataset))
-    for idx, data in enumerate(dataloader):
-        #raw_img = data['orig_img'][0].detach().cpu().numpy()
-        #heatmap = data['gt_heat_map'][0].detach().cpu().numpy()
-        #mask = data['mask'][0].detach().cpu().numpy()
-        #corner_mask = data['corner_gt_mask'].squeeze().detach().cpu().numpy()
-        #edge_mask = data['edge_gt_mask'].squeeze().detach().cpu().numpy()
-        '''
-        f, axarr = plt.subplots(2,2) 
-        axarr[0,0].imshow(raw_img)
-        axarr[0,0].title.set_text('rgb image')
-        axarr[0, 0].axis('off')
-        axarr[0,1].imshow(alpha_blend(heatmap[1], heatmap[0]))
-        axarr[0,1].title.set_text('gt heatmap')
-        axarr[0, 1].axis('off')
-        axarr[1,0].imshow(alpha_blend(corner_mask, edge_mask))
-        axarr[1,0].title.set_text('target mask')
-        axarr[1, 0].axis('off')
-        axarr[1,1].imshow(alpha_blend(mask[1], mask[0]))
-        axarr[1,1].title.set_text('convmpn mask')
-        axarr[1, 1].axis('off')
-        plt.show()
-        plt.close()
-        #os.makedirs(config['save_path'], exist_ok=True)
-        #plt.savefig(os.path.join(config['save_path'], data['name'][0]+'.jpg'), bbox_inches='tight', dpi=150)
-        #plt.clf()
-        '''
-    
-        
-
-#test()
