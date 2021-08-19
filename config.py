@@ -6,16 +6,16 @@ std = [0.229, 0.224, 0.225]
 batchsize = 16
 save_freq = 1
 lr_stepsize = 2 
-num_epochs = 5
+num_epochs = 20
 print_freq = 20
 graph_per_data = 10
 beam_width = 2
 beam_depth = 5
 epsilon = 0.2
 
-data_folder = './datasets/cities_dataset'
-exp_path = './result'
-exp_name = 'convmpn_aug' 
+data_folder = '/local-scratch/projects/sae/datasets/cities_dataset'
+exp_path = './exp_run1'
+exp_name = 'convmpn' 
 save_path = os.path.join(exp_path, exp_name)
 
 lr = 2e-4 
