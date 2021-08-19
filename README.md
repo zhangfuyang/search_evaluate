@@ -38,7 +38,9 @@ Both data are required for training and evaluation, unzip and move them to the `
 ```
 python train_evaluators.py
 ```
-This will start both the train and search threads. You can change settings like beam search depth in the `config.py`.
+This will start both the train and search threads. 
+
+You can change settings like beam search depth, width, training epochs and etc in the `config.py`.
 
 ### Evaluation
 First, perform search over the test data:
