@@ -1,25 +1,20 @@
 import random 
 from colorama import Fore, Style
-from new_utils import visualization, candidate_enumerate_training, reduce_duplicate_candidate, Graph, Candidate
+from utils import (visualization, candidate_enumerate_training, reduce_duplicate_candidate, 
+                   Graph, Candidate, remove_intersection_and_duplicate, sort_graph)
 import threading
 import numpy as np
 import os
-from new_utils import remove_intersection_and_duplicate, sort_graph
 from config import config 
 import time 
 import torch 
 import torch.nn.functional as F
-from multiprocessing import Manager
-import matplotlib.pyplot as plt
-from new_dataset import EvaluatorDataset
-from new_scoreAgent import *
-import pdb
-import threading
+from dataset import EvaluatorDataset
+from scoreAgent import *
 
 cornerLoss = torch.nn.L1Loss()
 edgeLoss = torch.nn.L1Loss()
 heatmapLoss = torch.nn.MSELoss()
-
 
 
 class trainThread(threading.Thread):
