@@ -90,10 +90,11 @@ class trainThread(threading.Thread):
                     print('[Epoch %d: %d/%d] heat loss: %.4f, corner loss: %.4f, edge loss: %.4f, total loss: %.4f' % 
                         (epoch, iteration+1, num_batch, heatmap_l.item(), edge_l.item(), corner_l.item(), loss.item()))
                 
-                # Update search model
-                self.lock.acquire()
-                self.searchModel.load_state_dict(self.model.state_dict())
-                self.lock.release()
+            # Update search model weights
+            print('update search thread weights...')
+            self.lock.acquire()
+            self.searchModel.load_state_dict(self.model.state_dict())
+            self.lock.release()
                 
             # Save model weights
             if (epoch+1) % config['save_freq'] == 0:
