@@ -9,7 +9,7 @@ Fuyang Zhang, Xiang Xu, Nelson Nauata, Yasutaka Furukawa.
 
 In ICCV 2021
 
-[<img src="images/teaser.png" width="2000">](xxx)
+[<img src="images/teaser.png" width="2000">](https://arxiv.org/pdf/2108.07990.pdf)
 
 ## Prerequisites
 - Linux
