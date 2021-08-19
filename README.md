@@ -49,7 +49,7 @@ First, perform beam search over all the test data:
 python search_result.py
 ```
 
-Then, evaluate the scores:
+Then, evaluate the scores for all searched results:
 ```
 python metric_for_result.py
 ```
