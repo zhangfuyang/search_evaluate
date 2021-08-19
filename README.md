@@ -58,7 +58,6 @@ python metric_for_result.py
 Download individual pretrained model and its beam search results.
 
 | **Training Dataset** |     **Model Weights**           | **Beam Search Results**                                                                               |
-|--------------------|-----------|----------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | NYUv2               | [saic](https://github.com/saic-vul/saic_depth_completion/tree/94bececdf12bb9867ce52c970bb2d11dee948d37) | [saic_rawD.zip](http://aspis.cmpt.sfu.ca/projects/mirrors/mirror3d_zip_release/checkpoint/nyu/saic_rawD.zip)                  |
 
 
