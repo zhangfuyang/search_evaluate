@@ -55,7 +55,7 @@ python metric_for_result.py
 ```
 
 ## Pretrained models
-We provide pretrained models here...
+We also provide pretrained models and their searched results.
 
 
 ## <a name="Citing"></a>Citation
