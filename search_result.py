@@ -14,7 +14,6 @@ from SVG_utils import svg_generate
 from utils import visualization, candidate_enumerate, reduce_duplicate_candidate, Graph, Candidate
 
 data_folder = config['data_folder']
-#maskrcnn_folder = os.path.join(config['data_folder'], 'result/corner_edge_region/entire_region_mask')
 beam_width = 5
 beam_depth = 12
 is_visualize = False
@@ -107,20 +106,6 @@ def search(evaluator):
                     best_count = 0
             best_count += 1
             
-            '''
-            if use_smc:
-                w = [candidate_.graph.graph_score() / 3 for candidate_ in current_candidates]
-                exp_w = np.exp(w)/np.exp(w).sum()
-                prev_candidates = []
-                while len(prev_candidates) != beam_width:
-                    if len(current_candidates) == 0:
-                        break
-                    pick = random.choices(range(len(current_candidates)), weights=exp_w, k=1)
-                    prev_candidates.append(current_candidates[pick[0]])
-                    current_candidates.pop(pick[0])
-                    exp_w = np.delete(exp_w, pick[0])
-                prev_candidates = sorted(prev_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
-            '''
             if True:
                 current_candidates = sorted(current_candidates, key=lambda x: x.graph.graph_score(), reverse=True)
                 
@@ -210,10 +195,6 @@ def save_gallery(candidate_gallery, name, save_path, best_candidates, gt_candida
     img_path = os.path.join(data_folder, 'rgb', name + '.jpg')
     img = plt.imread(img_path)
     plt.imsave(os.path.join(base_path, 'image.jpg'), img)
-
-    #img_path = os.path.join(maskrcnn_folder, name + '.png')
-    #img = plt.imread(img_path)
-    #plt.imsave(os.path.join(base_path, 'maskrcnn.png'), img)
 
     ##################################### GT ############################################
     base_name = 'gt_pred'
