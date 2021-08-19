@@ -5,12 +5,9 @@ from new_utils import *
 from config import config 
 
 
-base_path =  './convmpn_beamsearch'
-
+base_path = './exp_run/convmpn/test_prefix_5_convmpn' #'./convmpn_beamsearch'
 datapath = config['data_folder']
-obj_name = 'best.obj' #'best_0.obj'
-post_process = False
-
+obj_name = 'best_0.obj' #'best.obj' 
 gt_datapath = os.path.join(datapath, 'data/gt')
 
 class Metric():
