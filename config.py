@@ -5,7 +5,7 @@ std = [0.229, 0.224, 0.225]
 
 batchsize = 16
 save_freq = 1
-lr_stepsize = 2 
+lr_stepsize = 8 #5 
 num_epochs = 20
 print_freq = 20
 graph_per_data = 10
@@ -24,3 +24,5 @@ config = {}
 for name in list(vars().keys()):
     if name[0] != '_' and name != 'config' and name!='os':
         config[name] = vars()[name]
+
+
