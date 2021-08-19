@@ -59,7 +59,7 @@ Download individual pretrained model and its beam search results.
 
 | **Training Dataset** | **Model Weights** | **Beam Search Results**|
 |--------------------|-----------|----------------------|
-| Conv-MPN           | xxx      | xxx    |
+| Conv-MPN           | [download](https://drive.google.com/file/d/1CkX2E_WtlVMYOUXHDKLkdC1_EqMFv4B6/view?usp=sharing)      | xxx    |
 | IP                 | xxx      | xxx    |
 | Per-Edge           | xxx      | xxx    |
 
