@@ -13,6 +13,8 @@ from scoreAgent import scoreEvaluator_with_train as Model
 from SVG_utils import svg_generate
 from new_utils import visualization, candidate_enumerate, reduce_duplicate_candidate, Graph, Candidate
 
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+device = torch.device("cuda:0")
 data_folder = config['data_folder']
 beam_width = 5
 beam_depth = 12
@@ -34,7 +36,6 @@ search_loader = torch.utils.data.DataLoader(search_dataset,
                                             num_workers=0,
                                             drop_last=False)
 
-device = torch.device("cuda:0")
 evaluator_search = Model(config['data_folder'], device, backbone_channel=64)
 evaluator_search.load_weight(config['save_path'], prefix)
 path = './data/pretrained_heatmap'
