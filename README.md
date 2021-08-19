@@ -13,7 +13,7 @@ In ICCV 2021
 
 ## Prerequisites
 - Linux
-- NVIDIA GPU + CUDA CuDNN
+- NVIDIA GPU + CUDA CuDNN 11+
 - Python 3.7+, PyTorch 1.7+
 
 ## Dependencies
