@@ -26,7 +26,9 @@ $ pip install -r requirements.txt
 
 
 ## Data 
-Download the original cities_dataset from this [link](https://www.dropbox.com/sh/q1jmqnm26q21h1a/AABtxO0Uni9eZs-Qs37HJTJLa?dl=0). The dataset is from the paper ["Vectorizing World Buildings: Planar Graph Reconstruction by Primitive Detection and Relationship Classification"](https://arxiv.org/abs/1912.05135).
+Download our post-processed data from this [link]() (1GB). This includes the original cities_dataset from the paper ["Vectorizing World Buildings: Planar Graph Reconstruction by Primitive Detection and Relationship Classification"](https://arxiv.org/abs/1912.05135) as well as estmations from Conv-MPN / IP / Per-edge methods.
+
+You can also download the original data from this [link](https://www.dropbox.com/sh/q1jmqnm26q21h1a/AABtxO0Uni9eZs-Qs37HJTJLa?dl=0).
 
 ## Running the Code
 
