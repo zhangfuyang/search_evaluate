@@ -61,7 +61,7 @@ If you use find this code helpful, please consider citing:
       author={Fuyang Zhang and Xiang Xu and Nelson Nauata and Yasutaka Furukawa},
       year={2021},
       eprint={2108.07990},
-      archivePrefix={EInternational Conference on Computer Vision (ICCV)},
+      archivePrefix={International Conference on Computer Vision (ICCV)},
       primaryClass={cs.CV}
 }
 ```
