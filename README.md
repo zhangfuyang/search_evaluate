@@ -61,10 +61,10 @@ Download individual pretrained model and its beam search results.
 |--------------------|-----------|----------------------|
 | Conv-MPN           | [convmpn_weights.zip](https://drive.google.com/file/d/1CkX2E_WtlVMYOUXHDKLkdC1_EqMFv4B6/view?usp=sharing)      | [convmpn_beamsearch.zip](https://drive.google.com/file/d/15PzDz1ibeFoHtXXQD8kSvZoC_KcbZEu5/view?usp=sharing)    |
 | IP                 | [ip_weights.zip](https://drive.google.com/file/d/1z2cNS2js5pILNksxhlKkIBWRQ8wpu7eG/view?usp=sharing)      | [ip_beamsearch.zip](https://drive.google.com/file/d/1jolL4xFWkS6bmBFIjtRgkayOmXcwC8aI/view?usp=sharing)    |
-| Per-Edge           | xxx      | [peredge_beamsearch](https://drive.google.com/file/d/1OJQVfP0dEkNBdB4QscLxaB44S5_6wlAb/view?usp=sharing)     |
+| Per-Edge           | [peredge_weights.zip](https://drive.google.com/file/d/1wDfqwOa6xVWlDG93AjHX7OGdbDzsxGDd/view?usp=sharing)      | [peredge_beamsearch.zip](https://drive.google.com/file/d/1OJQVfP0dEkNBdB4QscLxaB44S5_6wlAb/view?usp=sharing)     |
 
 ## <a name="Citing"></a>Citation
-If you use find this code helpful, please consider citing:
+If you find this code helpful, please consider citing:
 ```BibTeX
 @InProceedings{zhang2021structured,
       title={Structured Outdoor Architecture Reconstruction by Exploration and Classification}, 
