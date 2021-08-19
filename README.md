@@ -57,8 +57,8 @@ python metric_for_result.py
 ## Pretrained models
 Download individual pretrained model and its beam search results.
 
-| **Training Dataset** | **Model Weights** | **Beam Search Results**            | Method                                                                          |
-|--------------------|-----------|----------------------|---------------------------------------------------------------------------------------------------------|
+| **Training Dataset** | **Model Weights** | **Beam Search Results**|
+|--------------------|-----------|----------------------|
 
 
 
