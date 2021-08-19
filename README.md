@@ -56,13 +56,6 @@ We provide pretrained models here...
 ## <a name="Citing"></a>Citation
 If you use find this code helpful, please consider citing:
 ```BibTeX
-@InProceedings{zhang2020phosa,
-    title = {Perceiving 3D Human-Object Spatial Arrangements from a Single Image in the Wild},
-    author = {Zhang, Jason Y. and Pepose, Sam and Joo, Hanbyul and Ramanan, Deva and Malik, Jitendra and Kanazawa, Angjoo},
-    booktitle = {European Conference on Computer Vision (ECCV)},
-    year = {2020},
-}
-
 @InProceedings{zhang2021structured,
       title={Structured Outdoor Architecture Reconstruction by Exploration and Classification}, 
       author={Fuyang Zhang and Xiang Xu and Nelson Nauata and Yasutaka Furukawa},
