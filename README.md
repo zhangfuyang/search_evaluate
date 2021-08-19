@@ -55,7 +55,7 @@ python metric_for_result.py
 ```
 
 ## Pretrained models
-Download our pretrained models and beam search results.
+Download individual pretrained model and its beam search results.
 
 
 ## <a name="Citing"></a>Citation
