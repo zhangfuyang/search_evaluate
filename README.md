@@ -36,8 +36,7 @@ The original data can be downloaded from [here](https://www.dropbox.com/sh/q1jmq
 ```
 python train_evaluators.py
 ```
-
-You can change the configurations in `config.py`.
+This will start both the train and search threads. You can change settings like beam search depth in the `config.py`.
 
 ### Evaluation
 First, perform search over the test data:
