@@ -29,7 +29,6 @@ use_heat_map = True
 print(save_path, save_name)
 
 search_dataset = myDataset(data_folder, phase=phase)
-
 search_loader = torch.utils.data.DataLoader(search_dataset,
                                             batch_size=1,
                                             shuffle=False,
