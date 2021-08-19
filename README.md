@@ -3,7 +3,7 @@
 Fuyang Zhang, Xiang Xu, Nelson Nauata, Yasutaka Furukawa.
 
 
-[[`arXiv`](xxx)]
+[[`arXiv`](https://arxiv.org/pdf/2108.07990.pdf)]
 [[`Project Page`](xxx)]
 [[`Bibtex`](#Citing)]
 
@@ -61,6 +61,15 @@ If you use find this code helpful, please consider citing:
     author = {Zhang, Jason Y. and Pepose, Sam and Joo, Hanbyul and Ramanan, Deva and Malik, Jitendra and Kanazawa, Angjoo},
     booktitle = {European Conference on Computer Vision (ECCV)},
     year = {2020},
+}
+
+@InProceedings{zhang2021structured,
+      title={Structured Outdoor Architecture Reconstruction by Exploration and Classification}, 
+      author={Fuyang Zhang and Xiang Xu and Nelson Nauata and Yasutaka Furukawa},
+      year={2021},
+      eprint={2108.07990},
+      archivePrefix={EInternational Conference on Computer Vision (ICCV)},
+      primaryClass={cs.CV}
 }
 ```
 ## Contact
