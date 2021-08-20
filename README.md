@@ -78,3 +78,6 @@ If you find this code helpful, please consider citing:
 ## Contact
 If you have any questions, please contact fuyangz@sfu.ca or xuxiangx@sfu.ca
 
+## Acknowledgement
+This research is partially supported by NSERC Discovery Grants with Accelerator Supplements and DND/NSERC Discovery Grant Supplement.
+
