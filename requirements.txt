@@ -4,5 +4,3 @@ opencv-python
 svgwrite
 colorama
 dicttoxml
-torch 
-torchvision
