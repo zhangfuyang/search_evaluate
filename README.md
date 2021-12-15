@@ -4,7 +4,7 @@ Fuyang Zhang, Xiang Xu, Nelson Nauata, Yasutaka Furukawa.
 
 
 [[`arXiv`](https://arxiv.org/abs/2108.07990)]
-[[`Project Page`](https://zhangfuyang.github.io/search-classify/page.html)]
+[[`Project Page`](https://zhangfuyang.github.io/expcls/)]
 [[`Bibtex`](#Citing)]
 
 In ICCV 2021
